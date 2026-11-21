@@ -25,9 +25,9 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 4.0; }
+    double getTailLengthSeconds() const override { return 5.0; }
 
-    // Presets are exposed to the host as "programs"
+    // Factory presets are exposed to the host as "programs"
     int getNumPrograms() override { return ak::numPresets(); }
     int getCurrentProgram() override;
     void setCurrentProgram(int index) override;
@@ -39,42 +39,80 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    // ---- Meter data (written by the audio thread, read by the editor) ----
+    // ---- preset / snapshot helpers (message thread) ----
+    ak::Values getValues() const;
+    void setValues(const ak::Values& v);
+
+    static juce::File getUserPresetDir();
+    juce::StringArray getUserPresetNames() const;
+    bool saveUserPreset(const juce::String& name);
+    bool loadUserPreset(const juce::String& name);
+    bool deleteUserPreset(const juce::String& name);
+    juce::String getCurrentUserPreset() const;     // empty when a factory preset is active
+
+    int getABSlot() const;
+    void toggleAB();
+    void copyToOtherAB();
+
+    // ---- meter data (written by the audio thread, read by the editor) ----
     std::atomic<float> meterInL { 0.f }, meterInR { 0.f };
     std::atomic<float> meterOutL { 0.f }, meterOutR { 0.f };
-    std::atomic<float> meterGR { 0.f };        // gain reduction in dB (positive number)
-    std::atomic<float> correlation { 1.f };    // -1 .. +1
+    std::atomic<float> meterGR1176 { 0.f }, meterGR670 { 0.f }, meterGRTotal { 0.f }, meterGRDeEss { 0.f };   // dB, positive
+    std::atomic<float> correlation { 1.f };
 
     static constexpr int scopeSize = 2048;
-    // copies the last scopeSize output samples (oldest first) for spectrum / vectorscope
     void copyScope(float* destL, float* destR) const;
-
     double getCurrentSampleRate() const { return sr; }
 
 private:
-    void updateFilters(const ak::EqParams& p);
+    struct Ptrs
+    {
+        std::atomic<float> *sens, *noise, *compress, *w1176, *w670, *ratio, *tc;
+        std::atomic<float> *pbass, *pbassatt, *pbassf, *ptreb, *ptrebatt, *ptrebf;
+        std::atomic<float> *eqg[5], *eqf[5], *eqq[5], *lpon, *lpf;
+        std::atomic<float> *airlow, *airhigh, *fx;
+        std::atomic<float> *revtype, *revtone, *decay, *revmix;
+        std::atomic<float> *dlydiv, *delay, *delaytone, *delaymix;
+        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessq, *deessmode, *deesslisten;
+    } P {};
 
-    std::array<std::atomic<float>*, ak::kNumParams> paramPtr {};
+    void updateFilters(const ak::EqParams& e, const ak::PultecParams& p);
 
-    ak::Biquad hpf[2], bassS[2], mudB[2], trebB[2], airS[2];
-    ak::Biquad deessHp[2];
-    ak::Biquad aLoHp[2], aLoHp2[2], aHiHp[2], aHiHp2[2];   // Air exciter
-    ak::Biquad revHp[2], wetHs[2];                          // reverb input high-pass / wet tone
+    // filters
+    ak::Biquad hpf[2], eq[5][2], lp1[2], lp2[2];
+    ak::Biquad pBassB[2], pBassA[2], pTrebB[2], pTrebA[2];
+    ak::Biquad deessBp[2];                                      // de-esser detector / split band
+    // Air exciter: the harmonics are generated from a band that does NOT overlap the output band,
+    // so the added signal can never cancel the original voice
+    ak::Biquad aLoSrc[2], aLoSrcLp1[2], aLoSrcLp2[2], aLoOut[2], aLoOut2[2], aLoPeak[2];     // low
+    ak::Biquad aHiSrc[2], aHiSrcLp1[2], aHiSrcLp2[2], aHiOut[2], aHiOut2[2], aHiShelf[2];    // high
+    ak::Biquad revHp[2], wetHs[2];                              // reverb input / wet tone
 
-    // delay (ping-pong) + reverb pre-delay
+    // dynamics state
+    float gateDb = 0.f, gateEnv = 0.f;
+    float gr1176 = 0.f, mk1176 = 0.f;
+    float gr670F = 0.f, gr670S = 0.f, mk670 = 0.f;
+    float deessEnv = 0.f, pcGr = 0.f;
+    float lastInGain = 1.f, lastOutGain = 1.f;
+
+    // FX (chorus / flanger / distortion lowpass)
+    std::vector<float> chBuf[2], flBuf[2];
+    int chWp = 0, flWp = 0;
+    float chPh = 0.f, flPh = 0.f, distLp[2] { 0.f, 0.f };
+
+    // delay + reverb pre-delay
     std::vector<float> dlyBuf[2], preBuf[2];
     int dlyWp = 0, preWp = 0;
     float dlyLp[2] { 0.f, 0.f };
 
-    juce::Reverb reverb;
-    juce::AudioBuffer<float> reverbBuf, dlyOut;
+    juce::Reverb reverb, chamber;
+    juce::AudioBuffer<float> reverbBuf, dlyOut, chamBuf;
 
     double sr = 44100.0;
-    float grState = 0.f, makeupCur = 0.f, deessEnv = 0.f;
-    float lastInGain = 1.f, lastOutGain = 1.f;
-
-    bool eqValid = false;
-    std::array<float, 9> lastEq {};
+    bool filtersValid = false;
+    std::array<float, 18> lastEq {};
+    float lastDeF = -1.f, lastDeQ = -1.f, lastAirLo = -1.f, lastAirHi = -1.f;
+    std::array<float, 6> lastPultec {};
     float lastRevTone = -1.f;
 
     std::array<float, scopeSize> scopeL {}, scopeR {};

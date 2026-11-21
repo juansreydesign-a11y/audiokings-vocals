@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 # Static MSVC runtime: the plugin runs on any Windows PC without installing the VC++ redistributable
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(AudiokingsVocals VERSION 1.0.0 LANGUAGES C CXX)
+project(AudiokingsVocals VERSION 3.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,7 @@ target_sources(AudiokingsVocals PRIVATE
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/Presets.h
+    Source/Params.h
     Source/Biquad.h)
 
 target_compile_definitions(AudiokingsVocals PUBLIC

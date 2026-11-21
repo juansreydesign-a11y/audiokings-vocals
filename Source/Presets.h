@@ -1,51 +1,36 @@
 #pragma once
+#include <array>
+#include <cstring>
+#include <utility>
 #include <vector>
+#include "Params.h"
 
 namespace ak
 {
-constexpr int kNumParams = 24;
+using Values = std::array<float, kNumParams>;
 
-// Index of every parameter (the preset rows below follow exactly this order)
-enum PIdx
+inline int indexOfParam(const char* id)
 {
-    Sens = 0, Compress, Bass, Treble, Air, Fx,
-    RevType, RevTone, Decay, Delay, DelayTone,
-    AirLow, AirHigh, Output,
-    Hpf, Attack, Release, DeEss, Drive,
-    Mud, BassF, MudF, TrebF, AirF
-};
+    for (int i = 0; i < kNumParams; ++i)
+        if (std::strcmp(kParams[i].id, id) == 0)
+            return i;
+    return -1;
+}
 
-inline const char* const kParamIds[kNumParams] = {
-    "sens",      // 0  Level / Sens: input gain + preamp drive (0..100, 50 = 0 dB)
-    "compress",  // 1  compression amount %
-    "bass",      // 2  dB  low shelf gain
-    "treble",    // 3  dB  presence bell gain
-    "air",       // 4  dB  high shelf gain
-    "fx",        // 5  %   macro: reverb + delay + harmonic saturation + brightness
-    "revtype",   // 6  0 Room, 1 Plate, 2 Hall
-    "revtone",   // 7  % (50 = neutral)
-    "decay",     // 8  % reverb decay
-    "delay",     // 9  % echo amount
-    "delaytone", // 10 % dark/washed  <->  bright/crisp
-    "airlow",    // 11 % harmonic exciter, mid-high band
-    "airhigh",   // 12 % harmonic exciter, high band
-    "output",    // 13 dB
-    "hpf",       // 14 Hz
-    "attack",    // 15 ms
-    "release",   // 16 ms
-    "deess",     // 17 %
-    "drive",     // 18 % base harmonic saturation
-    "mud",       // 19 dB  low-mid bell gain (EQ node)
-    "bassf",     // 20 Hz  bass node frequency
-    "mudf",      // 21 Hz  low-mid node frequency
-    "trebf",     // 22 Hz  treble node frequency
-    "airf"       // 23 Hz  air node frequency
-};
+inline Values defaultValues()
+{
+    Values v {};
+    for (int i = 0; i < kNumParams; ++i)
+        v[(size_t) i] = kParams[i].def;
+    return v;
+}
 
+// A preset only lists what differs from the defaults (choices are indices: ratio1176 0..4, tc670 0..5,
+// revtype 0..3 = Room/Plate/Hall/Studio, delaydiv 0..3 = 1/4, 1/8 dotted, 1/8, 1/16).
 struct Preset
 {
     const char* name;
-    float v[kNumParams];
+    std::vector<std::pair<const char*, float>> set;
 };
 
 struct PresetSection
@@ -56,30 +41,81 @@ struct PresetSection
 
 inline const std::vector<PresetSection>& sections()
 {
-    // sens cmp  bass  treb  air   fx  rTyp rTone dec dly dTone aLo aHi  out  hpf att  rel de drv   mud  bassF mudF trebF airF
     static const std::vector<PresetSection> s = {
         { "GENERAL - POP VOCALS", {
-            { "Pop Voice",      { 50, 45, -1.0f, 2.5f, 3.0f, 35, 1, 50, 45, 10, 60, 20, 25,  0,  90, 12, 150, 35,  5, -2.0f, 120, 350, 3500, 10000 } },
-            { "Pop Bright",     { 50, 50, -2.0f, 3.5f, 4.5f, 30, 1, 60, 40,  8, 65, 25, 40,  0, 100,  8, 120, 45,  3, -2.5f, 120, 350, 3800, 11000 } },
-            { "Pop Warm",       { 50, 45,  1.5f, 1.5f, 1.5f, 35, 0, 40, 45, 10, 40, 15, 15,  0,  80, 14, 180, 30, 10,  0.0f, 120, 350, 3000,  9000 } },
-            { "Pop Powerful",   { 52, 65, -0.5f, 3.0f, 3.0f, 32, 1, 50, 40,  8, 60, 25, 30, -1,  95,  6, 110, 40,  8, -1.5f, 120, 350, 3500, 10000 } },
-            { "Pop Airy",       { 48, 40, -2.0f, 2.0f, 5.5f, 60, 2, 60, 70, 25, 45, 20, 55,  0, 110, 15, 200, 45,  0, -2.0f, 120, 350, 3500, 12000 } },
-            { "Pop Intimate",   { 50, 35,  1.0f, 1.5f, 2.5f, 16, 0, 45, 25,  5, 55, 10, 20,  0,  85, 18, 220, 30,  8, -1.0f, 120, 350, 3200, 10000 } },
-            { "Backing Vocals", { 50, 55, -2.0f, 0.5f, 2.0f, 55, 2, 45, 60, 20, 40, 10, 20,  0, 130, 10, 140, 40,  0, -1.0f, 120, 350, 3000,  9000 } },
+            { "Pop Voice", { {"noise",10}, {"compress",45}, {"w670",60}, {"ratio1176",0}, {"tc670",1},
+                {"pbass",15}, {"pbassatt",8}, {"pbassf",90}, {"ptreb",25}, {"ptrebatt",10}, {"ptrebf",12000},
+                {"eqlowmid",-2}, {"eqpres",1.5f}, {"eqair",1}, {"airlow",20}, {"airhigh",25}, {"fx",25},
+                {"revtype",1}, {"revtone",50}, {"decay",45}, {"revmix",14}, {"delaydiv",1}, {"delay",25}, {"delaytone",60}, {"delaymix",6},
+                {"deess",35}, {"hpf",90}, {"attack",0.3f}, {"release",250} } },
+            { "Pop Bright", { {"noise",10}, {"compress",50}, {"w670",50}, {"ratio1176",1}, {"tc670",1},
+                {"pbass",5}, {"pbassatt",12}, {"pbassf",120}, {"ptreb",40}, {"ptrebatt",6}, {"ptrebf",12000},
+                {"eqlowmid",-2.5f}, {"eqpres",2}, {"airlow",25}, {"airhigh",40}, {"fx",20},
+                {"revtype",1}, {"revtone",60}, {"decay",40}, {"revmix",12}, {"delay",20}, {"delaytone",65}, {"delaymix",5},
+                {"deess",45}, {"hpf",100}, {"attack",0.2f}, {"release",200} } },
+            { "Pop Warm", { {"noise",10}, {"compress",45}, {"w670",70}, {"ratio1176",0}, {"tc670",2},
+                {"pbass",35}, {"pbassatt",12}, {"pbassf",70}, {"ptreb",12}, {"ptrebatt",8}, {"ptrebf",8000},
+                {"eqpres",1}, {"airlow",15}, {"airhigh",15}, {"fx",35},
+                {"revtype",0}, {"revtone",40}, {"decay",45}, {"revmix",14}, {"delay",20}, {"delaytone",40}, {"delaymix",5},
+                {"deess",30}, {"hpf",80}, {"attack",0.4f}, {"release",300} } },
+            { "Pop Powerful", { {"sens",52}, {"noise",10}, {"compress",65}, {"w670",70}, {"ratio1176",1}, {"tc670",1},
+                {"pbass",20}, {"pbassatt",8}, {"pbassf",100}, {"ptreb",30}, {"ptrebatt",10}, {"ptrebf",10000},
+                {"eqlowmid",-1.5f}, {"eqhimid",1.5f}, {"airlow",25}, {"airhigh",30}, {"fx",30},
+                {"revtype",1}, {"decay",40}, {"revmix",12}, {"delay",20}, {"delaytone",60}, {"delaymix",5},
+                {"deess",40}, {"hpf",95}, {"attack",0.1f}, {"release",150}, {"output",-1} } },
+            { "Pop Airy", { {"sens",48}, {"noise",10}, {"compress",40}, {"w670",60}, {"ratio1176",0}, {"tc670",2},
+                {"pbassatt",15}, {"pbassf",100}, {"ptreb",45}, {"ptrebatt",5}, {"ptrebf",14000},
+                {"eqlowmid",-2}, {"airlow",20}, {"airhigh",55}, {"fx",45},
+                {"revtype",2}, {"revtone",60}, {"decay",70}, {"revmix",26}, {"delay",35}, {"delaytone",40}, {"delaymix",14},
+                {"deess",45}, {"hpf",110}, {"attack",0.3f}, {"release",300} } },
+            { "Pop Intimate", { {"noise",15}, {"compress",35}, {"w670",40}, {"ratio1176",0}, {"tc670",2},
+                {"pbass",25}, {"pbassatt",5}, {"pbassf",80}, {"ptreb",15}, {"ptrebatt",5}, {"ptrebf",9000},
+                {"eqlowmid",-1}, {"airlow",10}, {"airhigh",20}, {"fx",15},
+                {"revtype",3}, {"revtone",45}, {"decay",25}, {"revmix",8}, {"delay",15}, {"delaymix",0},
+                {"deess",30}, {"hpf",85}, {"attack",0.4f}, {"release",350} } },
+            { "Backing Vocals", { {"noise",10}, {"compress",55}, {"w670",80}, {"ratio1176",1}, {"tc670",1},
+                {"pbassatt",18}, {"pbassf",120}, {"ptreb",20}, {"ptrebatt",10}, {"ptrebf",9000},
+                {"eqlowmid",-1}, {"airlow",10}, {"airhigh",20}, {"fx",40},
+                {"revtype",2}, {"revtone",45}, {"decay",60}, {"revmix",24}, {"delay",25}, {"delaymix",10},
+                {"deess",40}, {"hpf",130}, {"attack",0.3f}, {"release",250} } },
         } },
         { "AUDIOKINGS - RAP", {
             // Boom bap downtempo, upfront voice, long reverb
-            { "K1 Krespo",      { 55, 55,  1.5f, 3.0f, 2.0f, 60, 2, 45, 85, 25, 35, 20, 15,  0,  80, 15, 220, 30,  5, -1.5f, 110, 350, 3200, 10000 } },
+            { "K1 Krespo", { {"sens",55}, {"noise",10}, {"compress",55}, {"w670",70}, {"ratio1176",1}, {"tc670",2},
+                {"pbass",40}, {"pbassatt",10}, {"pbassf",70}, {"ptreb",25}, {"ptrebatt",8}, {"ptrebf",8000},
+                {"eqlowmid",-1.5f}, {"eqhimid",2}, {"eqpres",1}, {"airlow",20}, {"airhigh",15}, {"fx",30},
+                {"revtype",2}, {"revtone",45}, {"decay",85}, {"revmix",24}, {"delaydiv",0}, {"delay",30}, {"delaytone",35}, {"delaymix",8},
+                {"deess",30}, {"hpf",80}, {"attack",0.3f}, {"release",350} } },
             // 90s classic, dark and gritty (Mobb Deep style)
-            { "Ponze",          { 50, 60,  2.0f, 1.5f,-1.0f, 20, 0, 35, 25,  8, 30, 10,  5,  0, 100, 20, 180, 20, 30,  1.0f, 120, 400, 3000,  8000 } },
+            { "Ponze", { {"noise",5}, {"compress",60}, {"w670",80}, {"ratio1176",1}, {"tc670",3},
+                {"pbass",45}, {"pbassatt",15}, {"pbassf",100}, {"ptrebatt",20}, {"ptrebf",8000},
+                {"eqlowmid",1}, {"eqhimid",2}, {"eqair",-2}, {"lpon",1}, {"lpf",12000}, {"airlow",10}, {"airhigh",5}, {"fx",55},
+                {"revtype",0}, {"revtone",35}, {"decay",25}, {"revmix",8}, {"delay",20}, {"delaytone",25}, {"delaymix",0},
+                {"deess",20}, {"hpf",100}, {"attack",0.5f}, {"release",300} } },
             // Modern double-time, fast and compressed
-            { "Splash",         { 55, 78, -1.5f, 3.0f, 4.0f, 25, 1, 55, 35, 10, 70, 20, 40, -1, 100,  3,  80, 50, 12, -2.0f, 120, 350, 3800, 11000 } },
-            // 2000s style, compressed + bright, short reverb
-            { "Oral MCMP",      { 52, 70,  0.0f, 4.0f, 5.0f, 30, 0, 55, 18, 12, 65, 25, 45, -1,  95,  6, 100, 40, 15, -1.0f, 120, 350, 4000, 12000 } },
+            { "Splash", { {"sens",55}, {"noise",10}, {"compress",78}, {"w670",60}, {"ratio1176",2}, {"tc670",0},
+                {"pbass",10}, {"pbassatt",15}, {"pbassf",100}, {"ptreb",35}, {"ptrebatt",8}, {"ptrebf",12000},
+                {"eqlowmid",-2}, {"eqhimid",1}, {"eqpres",2}, {"airlow",20}, {"airhigh",40}, {"fx",30},
+                {"revtype",1}, {"revtone",55}, {"decay",35}, {"revmix",10}, {"delaydiv",3}, {"delay",25}, {"delaytone",70}, {"delaymix",5},
+                {"deess",50}, {"hpf",100}, {"attack",0.05f}, {"release",90}, {"output",-1} } },
+            // 2000s style: compressed + bright, short reverb
+            { "Oral MCMP", { {"sens",52}, {"noise",10}, {"compress",70}, {"w670",80}, {"ratio1176",2}, {"tc670",1},
+                {"pbass",20}, {"pbassatt",8}, {"pbassf",100}, {"ptreb",45}, {"ptrebatt",5}, {"ptrebf",10000},
+                {"eqlowmid",-1}, {"eqhimid",2}, {"eqpres",3}, {"airlow",25}, {"airhigh",45}, {"fx",35},
+                {"revtype",3}, {"revtone",55}, {"decay",18}, {"revmix",12}, {"delay",20}, {"delaytone",65}, {"delaymix",4},
+                {"deess",40}, {"hpf",95}, {"attack",0.1f}, {"release",120}, {"output",-1} } },
             // Aggressive rap
-            { "Terko",          { 58, 85,  1.0f, 4.5f, 2.5f, 25, 0, 50, 20,  5, 55, 20, 35, -2, 100,  2,  70, 30, 55,  0.0f, 120, 350, 3800, 10000 } },
+            { "Terko", { {"sens",58}, {"noise",15}, {"compress",85}, {"w670",80}, {"ratio1176",3}, {"tc670",0},
+                {"pbass",15}, {"pbassatt",10}, {"pbassf",90}, {"ptreb",40}, {"ptrebatt",5}, {"ptrebf",8000},
+                {"eqhimid",3}, {"eqpres",2}, {"airlow",25}, {"airhigh",30}, {"fx",65},
+                {"revtype",0}, {"decay",20}, {"revmix",6}, {"delay",15}, {"delaymix",0},
+                {"deess",30}, {"hpf",100}, {"attack",0.03f}, {"release",70}, {"output",-2} } },
             // Melodic R&B / Soul
-            { "JKing",          { 48, 40,  1.5f, 2.0f, 4.0f, 55, 2, 40, 60, 22, 45, 20, 40,  0,  90, 18, 250, 40,  5, -1.0f, 120, 350, 3200, 11000 } },
+            { "JKing", { {"sens",48}, {"noise",10}, {"compress",40}, {"w1176",70}, {"w670",80}, {"ratio1176",0}, {"tc670",2},
+                {"pbass",30}, {"pbassatt",8}, {"pbassf",80}, {"ptreb",35}, {"ptrebatt",8}, {"ptrebf",12000},
+                {"eqlowmid",-1}, {"airlow",20}, {"airhigh",40}, {"fx",40},
+                {"revtype",1}, {"revtone",40}, {"decay",60}, {"revmix",22}, {"delay",30}, {"delaytone",45}, {"delaymix",10},
+                {"deess",40}, {"hpf",90}, {"attack",0.4f}, {"release",400} } },
         } }
     };
     return s;
@@ -100,5 +136,16 @@ inline const Preset& presetAt(int index)
         index -= (int) sec.presets.size();
     }
     return sections()[0].presets[0];
+}
+
+inline Values resolve(const Preset& p)
+{
+    Values v = defaultValues();
+    for (const auto& kv : p.set)
+    {
+        const int i = indexOfParam(kv.first);
+        if (i >= 0) v[(size_t) i] = kv.second;
+    }
+    return v;
 }
 } // namespace ak
