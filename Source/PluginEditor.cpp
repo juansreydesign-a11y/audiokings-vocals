@@ -8,6 +8,10 @@ const char* const kNodeNames[5] = { "LOW", "LOW-MID", "HIGH-MID", "PRESENCE", "A
 const float kFreqLo[5] = { 40.f, 150.f, 800.f, 3000.f, 6000.f };
 const float kFreqHi[5] = { 400.f, 1000.f, 4000.f, 10000.f, 18000.f };
 const float kFreqDef[5] = { 100.f, 350.f, 2000.f, 5000.f, 11000.f };
+const char* const kQIds[5] = { "eqlowq", "eqlowmidq", "eqhimidq", "eqpresq", "eqairq" };
+const float kQLo[5] = { 0.3f, 0.3f, 0.3f, 0.3f, 0.3f };
+const float kQHi[5] = { 2.f, 8.f, 8.f, 8.f, 2.f };
+const float kQDef[5] = { 0.7f, 0.9f, 0.9f, 0.8f, 0.7f };
 
 juce::File skinSettingsFile()
 {
@@ -352,11 +356,16 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
     lpAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(proc.apvts, "lpon", lpBtn);
     addAndMakeVisible(lpBtn);
 
+    listenBtn.setClickingTogglesState(true);
+    listenBtn.setTooltip("Listen to the sibilance band the de-esser is working on");
+    listenAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(proc.apvts, "deesslisten", listenBtn);
+    addAndMakeVisible(listenBtn);
+
     rebuildPresetBox();
 
     // ---- knobs ----
     struct Spec { const char* id; const char* title; const char* tip; Knob::Size size; };
-    const Spec specs[21] = {
+    const Spec specs[24] = {
         { "sens",      "LEVEL / SENS", "Input level + preamp sensitivity. Aim the loudest peaks at the OPTIMAL zone.", Knob::Big },
         { "noise",     "NOISE",        "Noise reduction (downward expander) between phrases", Knob::Small },
         { "compress",  "COMPRESS",     "Master compression amount (feeds the 1176 and the 670)", Knob::Medium },
@@ -377,7 +386,10 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
         { "delaymix",  "MIX",          "Delay level (parallel signal)", Knob::Small },
         { "airlow",    "AIR LOW",      "Harmonic exciter on the upper mids (presence and bite)", Knob::Medium },
         { "airhigh",   "AIR HIGH",     "Harmonic exciter on the highs (silky commercial shine)", Knob::Medium },
-        { "output",    "OUTPUT",       "Output level", Knob::Medium }
+        { "output",    "OUTPUT",       "Output level", Knob::Medium },
+        { "deess",     "AMOUNT",       "De-esser sensitivity: how much sibilance is reduced", Knob::Small },
+        { "deessf",    "FREQ",         "Centre frequency of the sibilance, 3 - 10 kHz", Knob::Small },
+        { "deessr",    "RANGE",        "Maximum reduction (3 - 18 dB)", Knob::Small }
     };
     for (const auto& s : specs)
     {
@@ -390,11 +402,13 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
                                                 "1176 ratio (ALL = all-buttons-in mode)");
     tcBtns    = std::make_unique<ChoiceButtons>(proc.apvts, "tc670", juce::StringArray { "1", "2", "3", "4", "5", "6" }, false,
                                                 "Fairchild 670 time constant (1 = fast ... 6 = slow, program dependent)");
-    revBtns   = std::make_unique<ChoiceButtons>(proc.apvts, "revtype", juce::StringArray { "ROOM", "PLATE", "HALL" }, true,
+    revBtns   = std::make_unique<ChoiceButtons>(proc.apvts, "revtype", juce::StringArray { "ROOM", "PLATE", "HALL", "STUDIO" }, true,
                                                 "Reverb type");
     dlyBtns   = std::make_unique<ChoiceButtons>(proc.apvts, "delaydiv", juce::StringArray { "1/4", "1/8 DOT", "1/8", "1/16" }, true,
                                                 "Delay time (tempo-synced)");
-    for (auto* c : { ratioBtns.get(), tcBtns.get(), revBtns.get(), dlyBtns.get() })
+    deMode    = std::make_unique<ChoiceButtons>(proc.apvts, "deessmode", juce::StringArray { "SPLIT", "WIDE" }, false,
+                                                "SPLIT: only the sibilant band is reduced (transparent). WIDE: the whole signal is ducked");
+    for (auto* c : { ratioBtns.get(), tcBtns.get(), revBtns.get(), dlyBtns.get(), deMode.get() })
     {
         addAndMakeVisible(c);
         c->setAlpha(0.f);
@@ -519,23 +533,24 @@ void MainView::resized()
     prevBtn.setBounds(h.removeFromRight(32));
 
     // ---- top zone ----
-    eqPanel = { 16.f, 72.f, 830.f, 322.f };
-    meterPanel = { 858.f, 72.f, 486.f, 322.f };
+    eqPanel = { 16.f, 72.f, 900.f, 322.f };
+    meterPanel = { 928.f, 72.f, 536.f, 322.f };
     eqPlot = eqPanel.reduced(18.f, 0.f).withTrimmedTop(46.f).withTrimmedBottom(30.f);
     lpBtn.setBounds((int) eqPanel.getRight() - 18 - 96, (int) eqPanel.getY() + 10, 96, 22);
 
     // ---- console sections ----
     sections.clear();
-    sections.push_back({ { 16.f,   402.f, 300.f, 230.f }, "INPUT" });
-    sections.push_back({ { 322.f,  402.f, 330.f, 230.f }, "COMPRESSION  -  1176 + FAIRCHILD 670" });
-    sections.push_back({ { 658.f,  402.f, 520.f, 230.f }, "PULTEC EQ" });
-    sections.push_back({ { 1184.f, 402.f, 160.f, 230.f }, "FX" });
-    sections.push_back({ { 16.f,   640.f, 430.f, 224.f }, "REVERB  -  PARALLEL" });
-    sections.push_back({ { 452.f,  640.f, 430.f, 224.f }, "DELAY  -  PARALLEL" });
-    sections.push_back({ { 888.f,  640.f, 270.f, 224.f }, "AIR  -  HARMONIC EXCITER" });
-    sections.push_back({ { 1164.f, 640.f, 180.f, 224.f }, "OUT" });
+    sections.push_back({ { 16.f,   402.f, 320.f, 230.f }, "INPUT" });
+    sections.push_back({ { 342.f,  402.f, 350.f, 230.f }, "COMPRESSION  -  1176 + FAIRCHILD 670" });
+    sections.push_back({ { 698.f,  402.f, 560.f, 230.f }, "PULTEC EQ" });
+    sections.push_back({ { 1264.f, 402.f, 200.f, 230.f }, "FX" });
+    sections.push_back({ { 16.f,   640.f, 400.f, 224.f }, "REVERB  -  PARALLEL" });
+    sections.push_back({ { 422.f,  640.f, 400.f, 224.f }, "DELAY  -  PARALLEL" });
+    sections.push_back({ { 828.f,  640.f, 280.f, 224.f }, "DE-ESSER  -  AFTER PULTEC" });
+    sections.push_back({ { 1114.f, 640.f, 220.f, 224.f }, "AIR  -  EXCITER" });
+    sections.push_back({ { 1340.f, 640.f, 124.f, 224.f }, "OUT" });
 
-    if (knobs.size() < 21)
+    if (knobs.size() < 24)
         return;
 
     auto put = [this](size_t i, int x, int y, int w, int hh) { knobs[i]->setBounds(x, y, w, hh); };
@@ -543,28 +558,33 @@ void MainView::resized()
     // INPUT
     put(0, 24, 428, 150, 196);
     ledRect = { 182.f, 440.f, 52.f, 178.f };
-    put(1, 236, 468, 76, 112);
+    put(1, 246, 468, 80, 112);
     // COMPRESSION
-    put(2, 330, 436, 110, 140);
-    put(3, 446, 452, 84, 110);
-    put(4, 534, 452, 84, 110);
-    ratioBtns->setBounds(398, 586, 244, 20);
-    tcBtns->setBounds(398, 608, 244, 20);
+    put(2, 350, 436, 110, 140);
+    put(3, 466, 452, 84, 110);
+    put(4, 554, 452, 84, 110);
+    ratioBtns->setBounds(420, 586, 262, 20);
+    tcBtns->setBounds(420, 608, 262, 20);
     // PULTEC
-    put(5, 664, 440, 100, 150);  put(6, 766, 458, 70, 112);  put(7, 838, 458, 70, 112);
-    put(8, 924, 440, 100, 150);  put(9, 1026, 458, 70, 112); put(10, 1098, 458, 70, 112);
+    put(5, 712, 440, 100, 150);   put(6, 816, 458, 70, 112);   put(7, 890, 458, 70, 112);
+    put(8, 1000, 440, 100, 150);  put(9, 1104, 458, 70, 112);  put(10, 1178, 458, 70, 112);
     // FX
-    put(11, 1198, 440, 130, 160);
-    fxBar = { 1196.f, 606.f, 134.f, 14.f };
+    put(11, 1284, 440, 160, 160);
+    fxBar = { 1284.f, 606.f, 160.f, 14.f };
     // REVERB
-    revBtns->setBounds(26, 686, 100, 102);
-    put(12, 140, 672, 96, 150);  put(13, 240, 672, 96, 150);  put(14, 344, 690, 84, 120);
+    revBtns->setBounds(26, 686, 92, 112);
+    put(12, 128, 672, 90, 150);   put(13, 222, 672, 90, 150);  put(14, 320, 690, 80, 120);
     // DELAY
-    dlyBtns->setBounds(462, 686, 100, 116);
-    put(15, 572, 672, 96, 150);  put(16, 672, 672, 96, 150);  put(17, 776, 690, 84, 120);
+    dlyBtns->setBounds(432, 686, 92, 116);
+    put(15, 534, 672, 90, 150);   put(16, 628, 672, 90, 150);  put(17, 726, 690, 80, 120);
+    // DE-ESSER
+    put(21, 836, 668, 80, 112);   put(22, 920, 668, 80, 112);  put(23, 1004, 668, 80, 112);
+    deMode->setBounds(836, 788, 130, 22);
+    listenBtn.setBounds(972, 788, 80, 22);
+    deBar = { 836.f, 828.f, 252.f, 12.f };
     // AIR + OUT
-    put(18, 900, 672, 120, 170);  put(19, 1028, 672, 120, 170);
-    put(20, 1190, 672, 120, 170);
+    put(18, 1120, 672, 100, 170);  put(19, 1224, 672, 100, 170);
+    put(20, 1346, 672, 112, 170);
 }
 
 //==============================================================================
@@ -635,11 +655,26 @@ void MainView::mouseExit(const juce::MouseEvent&)
     if (dragNode < 0) hoverNode = -1;
 }
 
+void MainView::setQ(int i, float q)
+{
+    q = juce::jlimit(kQLo[i], kQHi[i], q);
+    setP(kQIds[i], std::round(q * 100.f) / 100.f);
+}
+
 void MainView::mouseDown(const juce::MouseEvent& e)
 {
     dragNode = hitNode(e.position);
     if (dragNode < 0) return;
     hoverNode = dragNode;
+
+    // Shift + drag on an EQ node adjusts its Q / bandwidth
+    dragIsQ = e.mods.isShiftDown() && dragNode < 5;
+    if (dragIsQ)
+    {
+        qStart = getP(kQIds[dragNode]);
+        if (auto* p = proc.apvts.getParameter(kQIds[dragNode])) p->beginChangeGesture();
+        return;
+    }
 
     const char* ids[2] = { dragNode == 5 ? "lpf" : kGainIds[dragNode], dragNode == 5 ? "lpon" : kFreqIds[dragNode] };
     for (auto* id : ids)
@@ -651,16 +686,30 @@ void MainView::mouseDown(const juce::MouseEvent& e)
 
 void MainView::mouseDrag(const juce::MouseEvent& e)
 {
-    if (dragNode >= 0)
-        setNodeFromPos(dragNode, e.position);
+    if (dragNode < 0) return;
+    if (dragIsQ)
+    {
+        setQ(dragNode, qStart * std::exp(-(float) e.getDistanceFromDragStartY() * 0.012f));
+        return;
+    }
+    setNodeFromPos(dragNode, e.position);
 }
 
 void MainView::mouseUp(const juce::MouseEvent& e)
 {
     if (dragNode < 0) return;
-    const char* ids[2] = { dragNode == 5 ? "lpf" : kGainIds[dragNode], dragNode == 5 ? "lpon" : kFreqIds[dragNode] };
-    for (auto* id : ids)
-        if (auto* p = proc.apvts.getParameter(id)) p->endChangeGesture();
+
+    if (dragIsQ)
+    {
+        if (auto* p = proc.apvts.getParameter(kQIds[dragNode])) p->endChangeGesture();
+        dragIsQ = false;
+    }
+    else
+    {
+        const char* ids[2] = { dragNode == 5 ? "lpf" : kGainIds[dragNode], dragNode == 5 ? "lpon" : kFreqIds[dragNode] };
+        for (auto* id : ids)
+            if (auto* p = proc.apvts.getParameter(id)) p->endChangeGesture();
+    }
     dragNode = -1;
     hoverNode = hitNode(e.position);
 }
@@ -672,6 +721,19 @@ void MainView::mouseDoubleClick(const juce::MouseEvent& e)
     if (n == 5) { setP("lpon", getP("lpon") > 0.5f ? 0.f : 1.f); return; }
     setP(kGainIds[n], 0.f);
     setP(kFreqIds[n], kFreqDef[n]);
+    setP(kQIds[n], kQDef[n]);
+}
+
+void MainView::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& w)
+{
+    const int n = hitNode(e.position);
+    if (n >= 0 && n < 5)
+    {
+        hoverNode = n;
+        setQ(n, getP(kQIds[n]) * std::exp(w.deltaY * 1.6f));   // scroll up = narrower, down = wider
+        return;
+    }
+    Component::mouseWheelMove(e, w);
 }
 
 //==============================================================================
@@ -689,6 +751,7 @@ void MainView::timerCallback()
     fall(gr1176Db, proc.meterGR1176.exchange(0.f));
     fall(gr670Db, proc.meterGR670.exchange(0.f));
     fall(grDb, proc.meterGRTotal.exchange(0.f));
+    fall(grDeEssDb, proc.meterGRDeEss.exchange(0.f));
     grHist[(size_t) histPos] = grDb;
     histPos = (histPos + 1) % histN;
 
@@ -705,11 +768,12 @@ void MainView::timerCallback()
         knobs[i]->tick();
         knobs[i]->setAlpha(juce::jlimit(0.f, 1.f, intro * 1.6f - (float) i * 0.03f));
     }
-    for (auto* c : { ratioBtns.get(), tcBtns.get(), revBtns.get(), dlyBtns.get() })
+    for (auto* c : { ratioBtns.get(), tcBtns.get(), revBtns.get(), dlyBtns.get(), deMode.get() })
     {
         c->sync();
         c->setAlpha(a0);
     }
+    listenBtn.setAlpha(a0);
 
     syncPresetBox();
     const int slot = proc.getABSlot();
@@ -753,7 +817,7 @@ void MainView::updateCurve()
 
     ak::EqParams ep {};
     ep.hpf = getP("hpf");
-    for (int i = 0; i < 5; ++i) { ep.g[i] = getP(kGainIds[i]); ep.f[i] = getP(kFreqIds[i]); }
+    for (int i = 0; i < 5; ++i) { ep.g[i] = getP(kGainIds[i]); ep.f[i] = getP(kFreqIds[i]); ep.q[i] = getP(kQIds[i]); }
     ep.lpOn = getP("lpon") > 0.5f;
     ep.lpf = getP("lpf");
     const auto e = ak::makeEq(sr, ep);
@@ -956,8 +1020,8 @@ void MainView::paintEq(juce::Graphics& g)
     g.drawLine(eqPanel.getX() + 76.f, ly, eqPanel.getX() + 94.f, ly, 1.4f);
     g.setColour(k.dim);
     g.drawText("PULTEC", juce::Rectangle<int>((int) eqPanel.getX() + 98, (int) ly - 7, 60, 14), juce::Justification::centredLeft);
-    g.drawText("drag the nodes  -  double-click to reset",
-               juce::Rectangle<int>((int) eqPanel.getX() + 200, (int) ly - 7, 360, 14), juce::Justification::centredLeft);
+    g.drawText("drag = freq / gain   -   scroll or Shift+drag = Q   -   double-click = reset",
+               juce::Rectangle<int>((int) eqPanel.getX() + 200, (int) ly - 7, 520, 14), juce::Justification::centredLeft);
 
     const auto plot = eqPlot;
 
@@ -1107,10 +1171,11 @@ void MainView::paintEq(juce::Graphics& g)
         else
         {
             const float gdb = getP(kGainIds[shown]);
-            text = juce::String(kNodeNames[shown]) + "   " + fmtF(getP(kFreqIds[shown])) + "   " + (gdb >= 0.f ? "+" : "") + juce::String(gdb, 1) + " dB";
+            text = juce::String(kNodeNames[shown]) + "   " + fmtF(getP(kFreqIds[shown])) + "   " + (gdb >= 0.f ? "+" : "") + juce::String(gdb, 1)
+                 + " dB   Q " + juce::String(getP(kQIds[shown]), 2);
             col = nodeCol[shown];
         }
-        auto pill = juce::Rectangle<float>(plot.getCentreX() - 130.f, plot.getY() + 2.f, 260.f, 20.f);
+        auto pill = juce::Rectangle<float>(plot.getCentreX() - 160.f, plot.getY() + 2.f, 320.f, 20.f);
         g.setColour(juce::Colour(0xff05060d).withAlpha(0.85f));
         g.fillRoundedRectangle(pill, 10.f);
         g.setColour(col);
@@ -1379,26 +1444,47 @@ void MainView::paintInputLeds(juce::Graphics& g)
 void MainView::paintConsole(juce::Graphics& g)
 {
     const auto& k = S();
-    for (const auto& s : sections)
-        paintPanel(g, s.r, s.label);
+    for (const auto& sec : sections)
+        paintPanel(g, sec.r, sec.label);
 
     paintInputLeds(g);
 
     g.setColour(k.dim);
     g.setFont(mkFont(9.5f, true).withExtraKerningFactor(0.15f));
-    g.drawText("1176 RATIO", juce::Rectangle<int>(330, 586, 66, 20), juce::Justification::centredLeft);
-    g.drawText("670 TIME",   juce::Rectangle<int>(330, 608, 66, 20), juce::Justification::centredLeft);
+    g.drawText("1176 RATIO", juce::Rectangle<int>(350, 586, 66, 20), juce::Justification::centredLeft);
+    g.drawText("670 TIME",   juce::Rectangle<int>(350, 608, 66, 20), juce::Justification::centredLeft);
 
     // Pultec sub-groups
     g.setColour(k.gold.withAlpha(0.85f));
-    g.drawText("LOW  -  25 - 220 Hz",  juce::Rectangle<int>(668, 424, 220, 12), juce::Justification::centredLeft);
-    g.drawText("HIGH  -  4 - 20 kHz",  juce::Rectangle<int>(928, 424, 220, 12), juce::Justification::centredLeft);
+    g.drawText("LOW  -  25 - 220 Hz",  juce::Rectangle<int>(716, 424, 220, 12), juce::Justification::centredLeft);
+    g.drawText("HIGH  -  4 - 20 kHz",  juce::Rectangle<int>(1004, 424, 220, 12), juce::Justification::centredLeft);
     g.setColour(juce::Colours::white.withAlpha(0.08f));
-    g.drawVerticalLine(914, 430.f, 620.f);
+    g.drawVerticalLine(980, 430.f, 620.f);
 
     g.setColour(k.dim);
-    g.drawText("TYPE", juce::Rectangle<int>(26, 668, 100, 14), juce::Justification::centredLeft);
-    g.drawText("TIME", juce::Rectangle<int>(462, 668, 100, 14), juce::Justification::centredLeft);
+    g.drawText("TYPE", juce::Rectangle<int>(26, 668, 92, 14), juce::Justification::centredLeft);
+    g.drawText("TIME", juce::Rectangle<int>(432, 668, 92, 14), juce::Justification::centredLeft);
+
+    // de-esser reduction bar
+    {
+        g.setColour(k.dim);
+        g.drawText("REDUCTION", juce::Rectangle<int>(836, 812, 100, 14), juce::Justification::centredLeft);
+        g.setColour(grDeEssDb > 0.2f ? k.accC : k.dim);
+        g.drawText("-" + juce::String(grDeEssDb, 1) + " dB", juce::Rectangle<int>(988, 812, 100, 14), juce::Justification::centredRight);
+
+        g.setColour(k.meterBg);
+        g.fillRoundedRectangle(deBar, 4.f);
+        const float w = deBar.getWidth() * juce::jlimit(0.f, 1.f, grDeEssDb / 18.f);
+        if (w > 1.f)
+        {
+            juce::ColourGradient dg(k.accB, deBar.getX(), 0.f, k.accC, deBar.getRight(), 0.f, false);
+            g.setGradientFill(dg);
+            g.fillRoundedRectangle(deBar.withWidth(w), 4.f);
+        }
+        g.setColour(juce::Colours::white.withAlpha(0.15f));
+        for (int d : { 6, 12 })
+            g.fillRect(deBar.getX() + deBar.getWidth() * (float) d / 18.f, deBar.getY(), 1.f, deBar.getHeight());
+    }
 
     // FX bar: pop <-> experimental
     {

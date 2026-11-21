@@ -10,7 +10,7 @@
 
 namespace akui
 {
-constexpr int kBaseW = 1360;
+constexpr int kBaseW = 1480;
 constexpr int kBaseH = 880;
 
 //==============================================================================
@@ -141,6 +141,7 @@ public:
     void mouseDrag(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
     void mouseDoubleClick(const juce::MouseEvent&) override;
+    void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
     void timerCallback() override;
@@ -177,6 +178,7 @@ private:
     juce::Point<float> nodePos(int i) const;
     int hitNode(juce::Point<float> p) const;
     void setNodeFromPos(int i, juce::Point<float> p);
+    void setQ(int i, float q);
 
     AudiokingsVocalsProcessor& proc;
     akui::AKLookAndFeel laf;                       // declared first: destroyed last
@@ -186,22 +188,22 @@ private:
     // header
     juce::ComboBox presetBox, skinBox;
     juce::TextButton prevBtn { "<" }, nextBtn { ">" }, saveBtn { "SAVE" }, delBtn { "DEL" },
-                     abBtn { "A" }, copyBtn { "A>B" }, lpBtn { "LOW-PASS" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> lpAttach;
+                     abBtn { "A" }, copyBtn { "A>B" }, lpBtn { "LOW-PASS" }, listenBtn { "LISTEN" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> lpAttach, listenAttach;
     juce::StringArray userNames;
 
     // controls
     std::vector<std::unique_ptr<akui::Knob>> knobs;
-    std::unique_ptr<akui::ChoiceButtons> ratioBtns, tcBtns, revBtns, dlyBtns;
+    std::unique_ptr<akui::ChoiceButtons> ratioBtns, tcBtns, revBtns, dlyBtns, deMode;
 
     struct Section { juce::Rectangle<float> r; juce::String label; };
     std::vector<Section> sections;
-    juce::Rectangle<float> eqPanel, meterPanel, eqPlot, ledRect, fxBar;
+    juce::Rectangle<float> eqPanel, meterPanel, eqPlot, ledRect, fxBar, deBar;
 
     // animation / metering state
     float phase = 0.f, intro = 0.f;
     akui::Meter inL, inR, outL, outR;
-    float gr1176Db = 0.f, gr670Db = 0.f, grDb = 0.f, corrSmooth = 1.f;
+    float gr1176Db = 0.f, gr670Db = 0.f, grDb = 0.f, grDeEssDb = 0.f, corrSmooth = 1.f;
     static constexpr int histN = 170;
     std::array<float, histN> grHist {};
     int histPos = 0;
@@ -221,6 +223,8 @@ private:
     juce::Image scopeImg;
 
     int hoverNode = -1, dragNode = -1;
+    bool dragIsQ = false;
+    float qStart = 1.f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainView)
 };

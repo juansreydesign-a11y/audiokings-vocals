@@ -45,6 +45,12 @@ inline const ParamDef kParams[] = {
     { "eqhimidf",  "EQ High-Mid Freq", 800, 4000, 1,   2000, 2000, " Hz", 0, KFloat,  "" },
     { "eqpresf",   "EQ Presence Freq",3000,10000, 1,   5000, 5000, " Hz", 0, KFloat,  "" },
     { "eqairf",    "EQ Air Freq",     6000,18000, 1,  11000,11000, " Hz", 0, KFloat,  "" },
+    // ---- graphic EQ: Q / bandwidth ----
+    { "eqlowq",    "EQ Low Q",        0.3f,    2, 0.01f, 0.7f, 0.7f, "", 2, KFloat, "" },
+    { "eqlowmidq", "EQ Low-Mid Q",    0.3f,    8, 0.01f, 1.5f, 0.9f, "", 2, KFloat, "" },
+    { "eqhimidq",  "EQ High-Mid Q",   0.3f,    8, 0.01f, 1.5f, 0.9f, "", 2, KFloat, "" },
+    { "eqpresq",   "EQ Presence Q",   0.3f,    8, 0.01f, 1.5f, 0.8f, "", 2, KFloat, "" },
+    { "eqairq",    "EQ Air Q",        0.3f,    2, 0.01f, 0.7f, 0.7f, "", 2, KFloat, "" },
     // ---- low-pass filter ----
     { "lpon",      "Low-Pass On",        0,    1, 1,      0,    0, "",    0, KBool,   "" },
     { "lpf",       "Low-Pass Freq",   3000,20000, 10, 10000,16000, " Hz", 0, KFloat,  "" },
@@ -54,7 +60,7 @@ inline const ParamDef kParams[] = {
     // ---- FX macro ----
     { "fx",        "FX",                 0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
     // ---- reverb (parallel) ----
-    { "revtype",   "Reverb Type",        0,    2, 1,      0,    1, "",    0, KChoice, "Room|Plate|Hall" },
+    { "revtype",   "Reverb Type",        0,    3, 1,      0,    1, "",    0, KChoice, "Room|Plate|Hall|Studio" },
     { "revtone",   "Reverb Tone",        0,  100, 0.1f,   0,   50, " %",  0, KFloat,  "" },
     { "decay",     "Decay",              0,  100, 0.1f,   0,   40, " %",  0, KFloat,  "" },
     { "revmix",    "Reverb Mix",         0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
@@ -69,7 +75,12 @@ inline const ParamDef kParams[] = {
     { "hpf",       "High-Pass",         20,  300, 1,     90,   90, " Hz", 0, KFloat,  "" },
     { "attack",    "1176 Attack",     0.02f, 0.8f, 0.01f, 0.25f, 0.3f, " ms", 2, KFloat, "" },
     { "release",   "1176 Release",      50, 1100, 1,    300,  250, " ms", 0, KFloat,  "" },
-    { "deess",     "De-Esser",           0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" }
+    // ---- de-esser (after the Pultec) ----
+    { "deess",     "De-Esser Amount",    0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "deessf",    "De-Esser Freq",   3000,10000, 10,  6500, 6500, " Hz", 0, KFloat,  "" },
+    { "deessr",    "De-Esser Range",     0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
+    { "deessmode", "De-Esser Mode",      0,    1, 1,      0,    0, "",    0, KChoice, "Split|Wide" },
+    { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" }
 };
 
 constexpr int kNumParams = (int) (sizeof(kParams) / sizeof(kParams[0]));

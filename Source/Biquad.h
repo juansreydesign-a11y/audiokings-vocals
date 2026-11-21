@@ -10,7 +10,7 @@ struct BiquadCoeffs
     double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
 };
 
-enum class BQ { LowShelf, HighShelf, Peak, HighPass, LowPass };
+enum class BQ { LowShelf, HighShelf, Peak, HighPass, LowPass, BandPass };
 
 inline BiquadCoeffs makeBiquad(BQ type, double sr, double f0, double q, double gainDb)
 {
@@ -47,6 +47,10 @@ inline BiquadCoeffs makeBiquad(BQ type, double sr, double f0, double q, double g
             break;
         case BQ::HighPass:
             b0 = (1 + cw) / 2;  b1 = -(1 + cw);  b2 = (1 + cw) / 2;
+            a0 = 1 + alpha;     a1 = -2 * cw;    a2 = 1 - alpha;
+            break;
+        case BQ::BandPass:      // constant 0 dB peak gain
+            b0 = alpha;         b1 = 0;          b2 = -alpha;
             a0 = 1 + alpha;     a1 = -2 * cw;    a2 = 1 - alpha;
             break;
         case BQ::LowPass:
@@ -98,6 +102,7 @@ struct EqParams
     float hpf;
     float g[5];
     float f[5];
+    float q[5];
     bool  lpOn;
     float lpf;
 };
@@ -112,11 +117,11 @@ inline EqSet makeEq(double sr, const EqParams& p)
 {
     EqSet e;
     e.hp   = makeBiquad(BQ::HighPass,  sr, p.hpf,  0.707, 0.0);
-    e.n[0] = makeBiquad(BQ::LowShelf,  sr, p.f[0], 0.7,   p.g[0]);
-    e.n[1] = makeBiquad(BQ::Peak,      sr, p.f[1], 0.9,   p.g[1]);
-    e.n[2] = makeBiquad(BQ::Peak,      sr, p.f[2], 0.9,   p.g[2]);
-    e.n[3] = makeBiquad(BQ::Peak,      sr, p.f[3], 0.8,   p.g[3]);
-    e.n[4] = makeBiquad(BQ::HighShelf, sr, p.f[4], 0.7,   p.g[4]);
+    e.n[0] = makeBiquad(BQ::LowShelf,  sr, p.f[0], p.q[0], p.g[0]);
+    e.n[1] = makeBiquad(BQ::Peak,      sr, p.f[1], p.q[1], p.g[1]);
+    e.n[2] = makeBiquad(BQ::Peak,      sr, p.f[2], p.q[2], p.g[2]);
+    e.n[3] = makeBiquad(BQ::Peak,      sr, p.f[3], p.q[3], p.g[3]);
+    e.n[4] = makeBiquad(BQ::HighShelf, sr, p.f[4], p.q[4], p.g[4]);
     e.lpOn = p.lpOn;
     e.lp1  = makeBiquad(BQ::LowPass,   sr, p.lpf,  0.5412, 0.0);   // 4th-order Butterworth
     e.lp2  = makeBiquad(BQ::LowPass,   sr, p.lpf,  1.3066, 0.0);

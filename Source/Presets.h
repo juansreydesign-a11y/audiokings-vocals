@@ -26,7 +26,7 @@ inline Values defaultValues()
 }
 
 // A preset only lists what differs from the defaults (choices are indices: ratio1176 0..4, tc670 0..5,
-// revtype 0..2 = Room/Plate/Hall, delaydiv 0..3 = 1/4, 1/8 dotted, 1/8, 1/16).
+// revtype 0..3 = Room/Plate/Hall/Studio, delaydiv 0..3 = 1/4, 1/8 dotted, 1/8, 1/16).
 struct Preset
 {
     const char* name;
@@ -71,7 +71,7 @@ inline const std::vector<PresetSection>& sections()
             { "Pop Intimate", { {"noise",15}, {"compress",35}, {"w670",40}, {"ratio1176",0}, {"tc670",2},
                 {"pbass",25}, {"pbassatt",5}, {"pbassf",80}, {"ptreb",15}, {"ptrebatt",5}, {"ptrebf",9000},
                 {"eqlowmid",-1}, {"airlow",10}, {"airhigh",20}, {"fx",15},
-                {"revtype",0}, {"revtone",45}, {"decay",25}, {"revmix",8}, {"delay",15}, {"delaymix",0},
+                {"revtype",3}, {"revtone",45}, {"decay",25}, {"revmix",8}, {"delay",15}, {"delaymix",0},
                 {"deess",30}, {"hpf",85}, {"attack",0.4f}, {"release",350} } },
             { "Backing Vocals", { {"noise",10}, {"compress",55}, {"w670",80}, {"ratio1176",1}, {"tc670",1},
                 {"pbassatt",18}, {"pbassf",120}, {"ptreb",20}, {"ptrebatt",10}, {"ptrebf",9000},
@@ -102,7 +102,7 @@ inline const std::vector<PresetSection>& sections()
             { "Oral MCMP", { {"sens",52}, {"noise",10}, {"compress",70}, {"w670",80}, {"ratio1176",2}, {"tc670",1},
                 {"pbass",20}, {"pbassatt",8}, {"pbassf",100}, {"ptreb",45}, {"ptrebatt",5}, {"ptrebf",10000},
                 {"eqlowmid",-1}, {"eqhimid",2}, {"eqpres",3}, {"airlow",25}, {"airhigh",45}, {"fx",35},
-                {"revtype",0}, {"revtone",55}, {"decay",18}, {"revmix",12}, {"delay",20}, {"delaytone",65}, {"delaymix",4},
+                {"revtype",3}, {"revtone",55}, {"decay",18}, {"revmix",12}, {"delay",20}, {"delaytone",65}, {"delaymix",4},
                 {"deess",40}, {"hpf",95}, {"attack",0.1f}, {"release",120}, {"output",-1} } },
             // Aggressive rap
             { "Terko", { {"sens",58}, {"noise",15}, {"compress",85}, {"w670",80}, {"ratio1176",3}, {"tc670",0},

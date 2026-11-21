@@ -4,19 +4,20 @@ Vocal channel strip (VST3, Windows x64) for **FL Studio** and **Ableton Live**, 
 
 ## Signal chain
 
-`Level/Sens (preamp)` -> `Noise reduction` -> `1176 compressor` -> `Pultec EQ` -> `Fairchild 670 compressor`
--> `Graphic EQ (+ low-pass)` -> `Air exciter (direct)` -> `De-esser` -> `FX macro` -> `Reverb + Delay (parallel)` -> `Output`
+`Level/Sens (preamp)` -> `Noise reduction` -> `1176 compressor` -> `Pultec EQ` -> `De-esser` -> `Fairchild 670 compressor`
+-> `Graphic EQ (+ low-pass)` -> `Air exciter (direct)` -> `FX macro` -> `Reverb + Delay (parallel)` -> `Output`
 
 ## Interface
 
-* **EQ live response** - 5 draggable nodes (Low, Low-Mid, High-Mid, Presence, Air) over a real-time spectrum, plus a draggable **low-pass** handle (on/off button). The Pultec curve is overlaid in gold.
+* **EQ live response** - 5 draggable nodes (Low, Low-Mid, High-Mid, Presence, Air) over a real-time spectrum. Drag = frequency / gain, **scroll wheel or Shift+drag = Q (bandwidth)**, double-click = reset. Plus a draggable **low-pass** handle (on/off button). The Pultec curve is overlaid in gold.
 * **Meters** - input / 1176 GR / 670 GR / output, **vectorscope**, stereo correlation and the overall **Gain Reduction** panel with history.
 * **Input** - big **Level / Sens** knob with a green-yellow-red LED meter and OPTIMAL zone, plus **Noise** reduction.
 * **Compression** - master **Compress** + **1176** / **670** weights, 1176 ratio (4, 8, 12, 20, ALL) and 670 time constant (1-6).
 * **Pultec EQ** - Bass / Atten / Freq (25-220 Hz) and Treble / Atten / Freq (4-20 kHz).
 * **FX** - 0-50%: warm saturation, parallel compression and chorus (pop). 50-100%: distortion, flanger and chamber reverb (experimental / rock). Independent of Reverb and Delay.
-* **Reverb** (Room / Plate / Hall, Tone, Decay, Mix) and **Delay** (tempo-synced, repeats, Tone, Mix) work in parallel.
-* **Air Low / Air High** - Fresh-Air style harmonic exciter, acting directly on the voice.
+* **De-esser** (after the Pultec) - Amount, Freq (3-10 kHz), Range, Split / Wide mode, Listen, with its own reduction meter.
+* **Reverb** (Room / Plate / Hall / **Studio** with subtle saturation, Tone, Decay, Mix) and **Delay** (tempo-synced, repeats, Tone, Mix) work in parallel.
+* **Air Low / Air High** - Fresh-Air style harmonic exciter (harmonic generation + shelf boost), acting directly on the voice.
 * **Skins**: Digital, Technical, Analog. **Resizable window** (drag the bottom-right corner).
 * **A/B compare**, **user presets** (SAVE / DEL, stored in `%APPDATA%\Audiokings\Vocals\Presets`).
 

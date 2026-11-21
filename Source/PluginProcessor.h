@@ -57,7 +57,7 @@ public:
     // ---- meter data (written by the audio thread, read by the editor) ----
     std::atomic<float> meterInL { 0.f }, meterInR { 0.f };
     std::atomic<float> meterOutL { 0.f }, meterOutR { 0.f };
-    std::atomic<float> meterGR1176 { 0.f }, meterGR670 { 0.f }, meterGRTotal { 0.f };   // dB, positive
+    std::atomic<float> meterGR1176 { 0.f }, meterGR670 { 0.f }, meterGRTotal { 0.f }, meterGRDeEss { 0.f };   // dB, positive
     std::atomic<float> correlation { 1.f };
 
     static constexpr int scopeSize = 2048;
@@ -69,11 +69,11 @@ private:
     {
         std::atomic<float> *sens, *noise, *compress, *w1176, *w670, *ratio, *tc;
         std::atomic<float> *pbass, *pbassatt, *pbassf, *ptreb, *ptrebatt, *ptrebf;
-        std::atomic<float> *eqg[5], *eqf[5], *lpon, *lpf;
+        std::atomic<float> *eqg[5], *eqf[5], *eqq[5], *lpon, *lpf;
         std::atomic<float> *airlow, *airhigh, *fx;
         std::atomic<float> *revtype, *revtone, *decay, *revmix;
         std::atomic<float> *dlydiv, *delay, *delaytone, *delaymix;
-        std::atomic<float> *output, *hpf, *attack, *release, *deess;
+        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessmode, *deesslisten;
     } P {};
 
     void updateFilters(const ak::EqParams& e, const ak::PultecParams& p);
@@ -81,8 +81,9 @@ private:
     // filters
     ak::Biquad hpf[2], eq[5][2], lp1[2], lp2[2];
     ak::Biquad pBassB[2], pBassA[2], pTrebB[2], pTrebA[2];
-    ak::Biquad deessHp[2];
-    ak::Biquad aLoHp[2], aLoHp2[2], aHiHp[2], aHiHp2[2];       // Air exciter
+    ak::Biquad deessBp[2];                                      // de-esser detector / split band
+    ak::Biquad aLoSrc[2], aLoOut[2], aLoPeak[2];                // Air exciter (low)
+    ak::Biquad aHiSrc[2], aHiOut[2], aHiOut2[2], aHiShelf[2];   // Air exciter (high)
     ak::Biquad revHp[2], wetHs[2];                              // reverb input / wet tone
 
     // dynamics state
@@ -107,7 +108,8 @@ private:
 
     double sr = 44100.0;
     bool filtersValid = false;
-    std::array<float, 13> lastEq {};
+    std::array<float, 18> lastEq {};
+    float lastDeF = -1.f, lastAirLo = -1.f, lastAirHi = -1.f;
     std::array<float, 6> lastPultec {};
     float lastRevTone = -1.f;
 
