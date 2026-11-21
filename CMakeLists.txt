@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 # Static MSVC runtime: the plugin runs on any Windows PC without installing the VC++ redistributable
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(AudiokingsVocals VERSION 3.2.0 LANGUAGES C CXX)
+project(AudiokingsVocals VERSION 3.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ juce_add_plugin(AudiokingsVocals
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
-    VST3_CATEGORIES Fx
+    VST3_CATEGORIES Fx Dynamics EQ
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
 target_sources(AudiokingsVocals PRIVATE

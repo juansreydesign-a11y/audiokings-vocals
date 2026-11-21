@@ -320,7 +320,7 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
     {
         const int id = presetBox.getSelectedId();
         if (id >= 1001 && id - 1001 < userNames.size()) proc.loadUserPreset(userNames[id - 1001]);
-        else if (id >= 1) proc.setCurrentProgram(id - 1);
+        else if (id >= 1) proc.loadFactoryPreset(id - 1);
     };
     addAndMakeVisible(presetBox);
 
@@ -473,7 +473,7 @@ void MainView::rebuildPresetBox()
 void MainView::syncPresetBox()
 {
     int id = 0;
-    const int cur = proc.getCurrentProgram();
+    const int cur = proc.getCurrentPreset();
     if (cur >= 0)
         id = cur + 1;
     else
@@ -547,7 +547,7 @@ void MainView::resized()
     sections.push_back({ { 1284.f, 402.f, 220.f, 230.f }, "FX" });
     sections.push_back({ { 16.f,   640.f, 400.f, 224.f }, "REVERB  -  PARALLEL" });
     sections.push_back({ { 422.f,  640.f, 400.f, 224.f }, "DELAY  -  PARALLEL" });
-    sections.push_back({ { 828.f,  640.f, 320.f, 224.f }, "DE-ESSER  -  AFTER PULTEC" });
+    sections.push_back({ { 828.f,  640.f, 320.f, 224.f }, "DE-ESSER  -  AFTER AIR" });
     sections.push_back({ { 1154.f, 640.f, 220.f, 224.f }, "AIR  -  EXCITER" });
     sections.push_back({ { 1380.f, 640.f, 124.f, 224.f }, "OUT" });
 
@@ -810,6 +810,12 @@ void MainView::updateSpectrum()
         db += 4.5f * std::log2(f0 / 1000.f);
         specDb[(size_t) i] = db > specDb[(size_t) i] ? db : specDb[(size_t) i] + (db - specDb[(size_t) i]) * 0.15f;
     }
+
+    // auto-range: the whole spectrum always fits inside the panel, with a little headroom for the peaks
+    float peak = -100.f;
+    for (float v : specDb) peak = std::max(peak, v);
+    const float want = std::max(-30.f, peak + 4.f);
+    specTop += (want - specTop) * (want > specTop ? 0.5f : 0.02f);
 }
 
 void MainView::updateCurve()
@@ -1046,7 +1052,7 @@ void MainView::paintEq(juce::Graphics& g)
     g.drawText("0 dB", juce::Rectangle<int>((int) eqPanel.getX() + 2, (int) plot.getCentreY() - 6, 34, 12), juce::Justification::centredRight);
 
     g.saveState();
-    g.reduceClipRegion(plot.expanded(0.f, 10.f).toNearestInt());
+    g.reduceClipRegion(plot.toNearestInt());
 
     // spectrum
     {
@@ -1054,7 +1060,8 @@ void MainView::paintEq(juce::Graphics& g)
         for (int i = 0; i < numPts; ++i)
         {
             const float x = plot.getX() + plot.getWidth() * (float) i / (float) (numPts - 1);
-            const float y = juce::jmap(juce::jlimit(-85.f, -20.f, specDb[(size_t) i]), -85.f, -20.f, plot.getBottom(), plot.getY());
+            const float lo = specTop - 66.f;
+            const float y = juce::jmap(juce::jlimit(lo, specTop, specDb[(size_t) i]), lo, specTop, plot.getBottom(), plot.getY() + 6.f);
             if (i == 0) line.startNewSubPath(x, y); else line.lineTo(x, y);
         }
         juce::Path area(line);
@@ -1498,10 +1505,6 @@ void MainView::paintConsole(juce::Graphics& g)
         g.fillRoundedRectangle(fill, 5.f);
         g.setColour(juce::Colours::white.withAlpha(0.7f));
         g.fillRect(fxBar.getCentreX() - 0.5f, fxBar.getY() - 2.f, 1.f, fxBar.getHeight() + 4.f);
-        g.setColour(k.dim);
-        g.setFont(mkFont(8.5f, true).withExtraKerningFactor(0.1f));
-        g.drawText("POP", juce::Rectangle<int>((int) fxBar.getX(), (int) fxBar.getBottom() + 2, 40, 12), juce::Justification::centredLeft);
-        g.drawText("ROCK", juce::Rectangle<int>((int) fxBar.getRight() - 40, (int) fxBar.getBottom() + 2, 40, 12), juce::Justification::centredRight);
     }
 }
 

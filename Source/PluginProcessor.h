@@ -27,12 +27,16 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 5.0; }
 
-    // Factory presets are exposed to the host as "programs"
-    int getNumPrograms() override { return ak::numPresets(); }
-    int getCurrentProgram() override;
-    void setCurrentProgram(int index) override;
-    const juce::String getProgramName(int index) override;
+    // Presets live inside the plug-in (not exposed as host "programs"), so Cubase / Reaper / FL / Live
+    // can never re-apply a preset over the user's settings when a project is loaded.
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram(int) override {}
+    const juce::String getProgramName(int) override { return "Audiokings Vocals"; }
     void changeProgramName(int, const juce::String&) override {}
+
+    int getCurrentPreset() const;                 // factory preset index, -1 when a user preset is active
+    void loadFactoryPreset(int index);
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
@@ -84,8 +88,9 @@ private:
     ak::Biquad deessBp[2];                                      // de-esser detector / split band
     // Air exciter: the harmonics are generated from a band that does NOT overlap the output band,
     // so the added signal can never cancel the original voice
-    ak::Biquad aLoSrc[2], aLoSrcLp1[2], aLoSrcLp2[2], aLoOut[2], aLoOut2[2], aLoPeak[2];     // low
-    ak::Biquad aHiSrc[2], aHiSrcLp1[2], aHiSrcLp2[2], aHiOut[2], aHiOut2[2], aHiShelf[2];    // high
+    ak::Biquad aLoSrc[2], aLoLp[4][2], aLoOut[2], aLoOut2[2], aLoPeak[2];     // low
+    ak::Biquad aHiSrc[2], aHiLp[4][2], aHiOut[2], aHiOut2[2], aHiShelf[2];    // high
+    float aLoEnv[2] { 0.f, 0.f }, aHiEnv[2] { 0.f, 0.f };
     ak::Biquad revHp[2], wetHs[2];                              // reverb input / wet tone
 
     // dynamics state

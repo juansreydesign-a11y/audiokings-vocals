@@ -222,6 +222,7 @@ private:
     std::vector<float> scopeR = std::vector<float>(AudiokingsVocalsProcessor::scopeSize, 0.f);
     juce::Image scopeImg;
 
+    float specTop = -30.f;            // auto-scaled top of the spectrum display (dB)
     int hoverNode = -1, dragNode = -1;
     bool dragIsQ = false;
     float qStart = 1.f;

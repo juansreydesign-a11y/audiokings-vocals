@@ -1,11 +1,12 @@
 # Audiokings Vocals
 
-Vocal channel strip (VST3, Windows x64) for **FL Studio** and **Ableton Live**, built with [JUCE](https://juce.com).
+Vocal channel strip (VST3, Windows x64) for **FL Studio**, **Ableton Live**, **Cubase** and **Reaper**, built with [JUCE](https://juce.com).
+Compatibility is through the VST3 standard (FL Studio 20.8+, Live 11+, Cubase 11+, Reaper 6.20+). Presets are handled inside the plug-in, so no host re-applies them over your settings.
 
 ## Signal chain
 
-`Level/Sens (preamp)` -> `Noise reduction` -> `1176 compressor` -> `Pultec EQ` -> `De-esser` -> `Fairchild 670 compressor`
--> `Graphic EQ (+ low-pass)` -> `Air exciter (direct)` -> `FX macro` -> `Reverb + Delay (parallel)` -> `Output`
+`Level/Sens (preamp)` -> `Noise reduction` -> `1176 compressor` -> `Pultec EQ` -> `Fairchild 670 compressor`
+-> `Graphic EQ (+ low-pass)` -> `Air exciter (direct)` -> `De-esser` -> `FX macro` -> `Reverb + Delay (parallel)` -> `Output`
 
 ## Interface
 
@@ -15,7 +16,7 @@ Vocal channel strip (VST3, Windows x64) for **FL Studio** and **Ableton Live**, 
 * **Compression** - master **Compress** + **1176** / **670** weights, 1176 ratio (4, 8, 12, 20, ALL) and 670 time constant (1-6).
 * **Pultec EQ** - Bass / Atten / Freq (25-220 Hz) and Treble / Atten / Freq (4-20 kHz).
 * **FX** - 0-50%: warm saturation, parallel compression and chorus (pop). 50-100%: distortion, flanger and chamber reverb (experimental / rock). Independent of Reverb and Delay.
-* **De-esser** (after the Pultec) - Amount, Freq (3-10 kHz), Range, Bandwidth (Q), Split / Wide mode, Listen, with its own reduction meter.
+* **De-esser** (after the Air exciter) - Amount, Freq (3-10 kHz), Range, Bandwidth (Q), Split / Wide mode, Listen, with its own reduction meter.
 * **Reverb** (Room / Plate / Hall / **Studio** with subtle saturation, Tone, Decay, Mix) and **Delay** (tempo-synced, repeats, Tone, Mix) work in parallel.
 * **Air Low / Air High** - Fresh-Air style harmonic exciter (harmonics generated from a separate source band + shelf boost; it only adds, it never cuts), acting directly on the voice.
 * **Skins**: Digital, Technical, Analog. **Resizable window** (drag the bottom-right corner).

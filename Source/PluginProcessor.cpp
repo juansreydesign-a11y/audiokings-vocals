@@ -119,7 +119,7 @@ AudiokingsVocalsProcessor::AudiokingsVocalsProcessor()
     P.deessf = get("deessf");   P.deessr = get("deessr");   P.deessq = get("deessq");
     P.deessmode = get("deessmode"); P.deesslisten = get("deesslisten");
 
-    setCurrentProgram(0);   // start on "Pop Voice"
+    loadFactoryPreset(0);   // start on "Pop Voice"
 }
 
 bool AudiokingsVocalsProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -156,23 +156,28 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
         for (int k = 0; k < 5; ++k) eq[k][c].reset();
         pBassB[c].reset(); pBassA[c].reset(); pTrebB[c].reset(); pTrebA[c].reset();
         deessBp[c].reset(); aLoPeak[c].reset(); aHiShelf[c].reset();
-        aLoSrc[c].reset(); aLoSrcLp1[c].reset(); aLoSrcLp2[c].reset(); aLoOut[c].reset(); aLoOut2[c].reset();
-        aHiSrc[c].reset(); aHiSrcLp1[c].reset(); aHiSrcLp2[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset();
+        aLoSrc[c].reset(); aLoOut[c].reset(); aLoOut2[c].reset();
+        aHiSrc[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset();
+        for (int k = 0; k < 4; ++k) { aLoLp[k][c].reset(); aHiLp[k][c].reset(); }
+        aLoEnv[c] = aHiEnv[c] = 0.f;
         revHp[c].reset(); wetHs[c].reset();
 
-        // 4th-order Butterworth pairs (Q = 0.5412 and 1.3066)
-        // Air Low : source 1.2 - 2.6 kHz  ->  harmonics kept above 3.4 kHz
-        aLoSrc[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 1200.0, 0.707,  0.0);
-        aLoSrcLp1[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 2600.0, 0.5412, 0.0);
-        aLoSrcLp2[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 2600.0, 1.3066, 0.0);
-        aLoOut[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 0.5412, 0.0);
-        aLoOut2[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 1.3066, 0.0);
-        // Air High: source 3.2 - 6 kHz    ->  harmonics kept above 9 kHz
-        aHiSrc[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 3200.0, 0.707,  0.0);
-        aHiSrcLp1[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 6000.0, 0.5412, 0.0);
-        aHiSrcLp2[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 6000.0, 1.3066, 0.0);
-        aHiOut[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 0.5412, 0.0);
-        aHiOut2[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 1.3066, 0.0);
+        // The source band is cut by an 8th-order Butterworth low-pass (4 sections) so almost nothing of it
+        // reaches the output band: harmonics are added only where the source has no content.
+        static const double q8[4] = { 0.5098, 0.6013, 0.9000, 2.5629 };
+        // Air Low : source 1.2 - 2.2 kHz  ->  harmonics kept above 3.4 kHz
+        aLoSrc[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 1200.0, 0.707,  0.0);
+        aLoOut[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 0.5412, 0.0);
+        aLoOut2[c].c = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 1.3066, 0.0);
+        // Air High: source 3.2 - 5.5 kHz  ->  harmonics kept above 9 kHz
+        aHiSrc[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 3200.0, 0.707,  0.0);
+        aHiOut[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 0.5412, 0.0);
+        aHiOut2[c].c = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 1.3066, 0.0);
+        for (int k = 0; k < 4; ++k)
+        {
+            aLoLp[k][c].c = ak::makeBiquad(ak::BQ::LowPass, sr, 2200.0, q8[k], 0.0);
+            aHiLp[k][c].c = ak::makeBiquad(ak::BQ::LowPass, sr, 5500.0, q8[k], 0.0);
+        }
         revHp[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 180.0, 0.707, 0.0);
     }
     dlyWp = preWp = chWp = flWp = 0;
@@ -383,6 +388,18 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int flSize = (int) flBuf[0].size();
     constexpr float twoPi = 6.28318531f;
 
+    // level-adaptive cubic shaper: no linear term, so band leakage can never cancel the voice
+    const float hAtk = (float) std::exp(-1.0 / (sr * 0.0003));
+    const float hRel = (float) std::exp(-1.0 / (sr * 0.015));
+    auto cubicHarm = [hAtk, hRel](float src, float& env)
+    {
+        const float a = std::abs(src);
+        env = a > env ? hAtk * env + (1.f - hAtk) * a : hRel * env + (1.f - hRel) * a;
+        const float e = env + 1.0e-5f;
+        const float u = juce::jlimit(-1.f, 1.f, src / e);
+        return u * u * u * e;
+    };
+
     float gr1176Max = 0.f, gr670Max = 0.f, grTotMax = 0.f;
 
     for (int i = 0; i < n; ++i)
@@ -451,30 +468,6 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
 
-        // --- de-esser: after the Pultec, before the 670 ---
-        if (deOn)
-        {
-            float band[2] = { 0.f, 0.f };
-            float det = 0.f;
-            for (int c = 0; c < nch; ++c)
-            {
-                band[c] = deessBp[c].process(x[c]);
-                det = std::max(det, std::abs(band[c]));
-            }
-            deessEnv = det > deessEnv ? envAtk * deessEnv + (1.f - envAtk) * det
-                                      : envRel * deessEnv + (1.f - envRel) * det;
-            const float envDb = juce::Decibels::gainToDecibels(deessEnv, -100.f);
-            const float red = std::min(deMax, std::max(0.f, envDb - deThr) * 0.75f);
-            deMaxRed = std::max(deMaxRed, red);
-            const float dg = juce::Decibels::decibelsToGain(-red);
-            if (deessListen)
-                for (int c = 0; c < nch; ++c) x[c] = band[c] * 3.f;            // monitor the sibilance band
-            else if (deessWide)
-                for (int c = 0; c < nch; ++c) x[c] *= dg;                        // wideband ducking
-            else
-                for (int c = 0; c < nch; ++c) x[c] -= (1.f - dg) * band[c];      // split-band (transparent)
-        }
-
         // --- 4) Fairchild 670 ---
         {
             float target = 0.f;
@@ -517,7 +510,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
 
-        // --- 6) Air exciter: harmonics + shelf, acting directly on the voice (never cuts, only adds) ---
+        // --- 6) Air exciter: harmonics + shelf, acting directly on the voice (it only adds, never cuts) ---
         if (airOn)
         {
             for (int c = 0; c < nch; ++c)
@@ -526,21 +519,45 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (aLo > 0.002f)
                 {
                     float src = aLoSrc[c].process(x[c]);
-                    src = aLoSrcLp2[c].process(aLoSrcLp1[c].process(src));      // source band only
-                    const float h = aLoOut2[c].process(aLoOut[c].process(std::tanh(8.f * src)));   // new harmonics only
-                    s += 0.5f * aLo * h;
+                    for (int k = 0; k < 4; ++k) src = aLoLp[k][c].process(src);          // source band only
+                    const float h = aLoOut2[c].process(aLoOut[c].process(cubicHarm(src, aLoEnv[c])));   // new harmonics only
+                    s += 1.5f * aLo * h;
                     s = aLoPeak[c].process(s);
                 }
                 if (aHi > 0.002f)
                 {
                     float src = aHiSrc[c].process(x[c]);
-                    src = aHiSrcLp2[c].process(aHiSrcLp1[c].process(src));      // 3.2 - 6 kHz source
-                    const float h = aHiOut2[c].process(aHiOut[c].process(std::tanh(10.f * src))); // harmonics above 9 kHz
-                    s += 1.3f * aHi * h;
-                    s = aHiShelf[c].process(s);                                  // +8 dB max boost, never a cut
+                    for (int k = 0; k < 4; ++k) src = aHiLp[k][c].process(src);          // 3.2 - 5.5 kHz source
+                    const float h = aHiOut2[c].process(aHiOut[c].process(cubicHarm(src, aHiEnv[c])));   // harmonics above 9 kHz
+                    s += 3.0f * aHi * h;
+                    s = aHiShelf[c].process(s);                                           // +8 dB max boost, never a cut
                 }
                 x[c] = s;
             }
+        }
+
+        // --- de-esser: after the Air exciter, to catch the sibilance it creates ---
+        if (deOn)
+        {
+            float band[2] = { 0.f, 0.f };
+            float det = 0.f;
+            for (int c = 0; c < nch; ++c)
+            {
+                band[c] = deessBp[c].process(x[c]);
+                det = std::max(det, std::abs(band[c]));
+            }
+            deessEnv = det > deessEnv ? envAtk * deessEnv + (1.f - envAtk) * det
+                                      : envRel * deessEnv + (1.f - envRel) * det;
+            const float envDb = juce::Decibels::gainToDecibels(deessEnv, -100.f);
+            const float red = std::min(deMax, std::max(0.f, envDb - deThr) * 0.75f);
+            deMaxRed = std::max(deMaxRed, red);
+            const float dg = juce::Decibels::decibelsToGain(-red);
+            if (deessListen)
+                for (int c = 0; c < nch; ++c) x[c] = band[c] * 3.f;            // monitor the sibilance band
+            else if (deessWide)
+                for (int c = 0; c < nch; ++c) x[c] *= dg;                        // wideband ducking
+            else
+                for (int c = 0; c < nch; ++c) x[c] -= (1.f - dg) * band[c];      // split-band (transparent)
         }
 
         // --- 7) FX macro (independent of the reverb and delay) ---
@@ -828,22 +845,17 @@ void AudiokingsVocalsProcessor::setValues(const ak::Values& v)
     }
 }
 
-int AudiokingsVocalsProcessor::getCurrentProgram()
+int AudiokingsVocalsProcessor::getCurrentPreset() const
 {
     return (int) apvts.state.getProperty("preset", 0);   // -1 when a user preset is active
 }
 
-void AudiokingsVocalsProcessor::setCurrentProgram(int index)
+void AudiokingsVocalsProcessor::loadFactoryPreset(int index)
 {
     index = juce::jlimit(0, ak::numPresets() - 1, index);
     setValues(ak::resolve(ak::presetAt(index)));
     apvts.state.setProperty("preset", index, nullptr);
     apvts.state.setProperty("userpreset", "", nullptr);
-}
-
-const juce::String AudiokingsVocalsProcessor::getProgramName(int index)
-{
-    return juce::String(ak::presetAt(juce::jlimit(0, ak::numPresets() - 1, index)).name);
 }
 
 juce::File AudiokingsVocalsProcessor::getUserPresetDir()
