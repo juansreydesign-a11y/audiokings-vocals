@@ -3,7 +3,7 @@
 ; The VST3 bundle must already be built in ..\build\AudiokingsVocals_artefacts\Release\VST3
 
 #ifndef AppVersion
-  #define AppVersion "3.1.0"
+  #define AppVersion "3.2.0"
 #endif
 #define AppName "Audiokings Vocals"
 #define VstSrc "..\build\AudiokingsVocals_artefacts\Release\VST3\Audiokings Vocals.vst3"

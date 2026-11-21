@@ -10,7 +10,7 @@
 
 namespace akui
 {
-constexpr int kBaseW = 1480;
+constexpr int kBaseW = 1520;
 constexpr int kBaseH = 880;
 
 //==============================================================================

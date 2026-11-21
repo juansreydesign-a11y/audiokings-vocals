@@ -73,7 +73,7 @@ private:
         std::atomic<float> *airlow, *airhigh, *fx;
         std::atomic<float> *revtype, *revtone, *decay, *revmix;
         std::atomic<float> *dlydiv, *delay, *delaytone, *delaymix;
-        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessmode, *deesslisten;
+        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessq, *deessmode, *deesslisten;
     } P {};
 
     void updateFilters(const ak::EqParams& e, const ak::PultecParams& p);
@@ -82,8 +82,10 @@ private:
     ak::Biquad hpf[2], eq[5][2], lp1[2], lp2[2];
     ak::Biquad pBassB[2], pBassA[2], pTrebB[2], pTrebA[2];
     ak::Biquad deessBp[2];                                      // de-esser detector / split band
-    ak::Biquad aLoSrc[2], aLoOut[2], aLoPeak[2];                // Air exciter (low)
-    ak::Biquad aHiSrc[2], aHiOut[2], aHiOut2[2], aHiShelf[2];   // Air exciter (high)
+    // Air exciter: the harmonics are generated from a band that does NOT overlap the output band,
+    // so the added signal can never cancel the original voice
+    ak::Biquad aLoSrc[2], aLoSrcLp1[2], aLoSrcLp2[2], aLoOut[2], aLoOut2[2], aLoPeak[2];     // low
+    ak::Biquad aHiSrc[2], aHiSrcLp1[2], aHiSrcLp2[2], aHiOut[2], aHiOut2[2], aHiShelf[2];    // high
     ak::Biquad revHp[2], wetHs[2];                              // reverb input / wet tone
 
     // dynamics state
@@ -109,7 +111,7 @@ private:
     double sr = 44100.0;
     bool filtersValid = false;
     std::array<float, 18> lastEq {};
-    float lastDeF = -1.f, lastAirLo = -1.f, lastAirHi = -1.f;
+    float lastDeF = -1.f, lastDeQ = -1.f, lastAirLo = -1.f, lastAirHi = -1.f;
     std::array<float, 6> lastPultec {};
     float lastRevTone = -1.f;
 

@@ -116,7 +116,7 @@ AudiokingsVocalsProcessor::AudiokingsVocalsProcessor()
     P.dlydiv = get("delaydiv"); P.delay = get("delay");     P.delaytone = get("delaytone"); P.delaymix = get("delaymix");
     P.output = get("output");   P.hpf = get("hpf");         P.attack = get("attack");
     P.release = get("release"); P.deess = get("deess");
-    P.deessf = get("deessf");   P.deessr = get("deessr");
+    P.deessf = get("deessf");   P.deessr = get("deessr");   P.deessq = get("deessq");
     P.deessmode = get("deessmode"); P.deesslisten = get("deesslisten");
 
     setCurrentProgram(0);   // start on "Pop Voice"
@@ -155,15 +155,24 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
         hpf[c].reset(); lp1[c].reset(); lp2[c].reset();
         for (int k = 0; k < 5; ++k) eq[k][c].reset();
         pBassB[c].reset(); pBassA[c].reset(); pTrebB[c].reset(); pTrebA[c].reset();
-        deessBp[c].reset(); aLoSrc[c].reset(); aLoOut[c].reset(); aLoPeak[c].reset();
-        aHiSrc[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset(); aHiShelf[c].reset();
+        deessBp[c].reset(); aLoPeak[c].reset(); aHiShelf[c].reset();
+        aLoSrc[c].reset(); aLoSrcLp1[c].reset(); aLoSrcLp2[c].reset(); aLoOut[c].reset(); aLoOut2[c].reset();
+        aHiSrc[c].reset(); aHiSrcLp1[c].reset(); aHiSrcLp2[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset();
         revHp[c].reset(); wetHs[c].reset();
 
-        aLoSrc[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 1500.0, 0.707, 0.0);
-        aLoOut[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 3000.0, 0.707, 0.0);
-        aHiSrc[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 3500.0, 0.707, 0.0);
-        aHiOut[c].c  = ak::makeBiquad(ak::BQ::HighPass, sr, 8500.0, 0.707, 0.0);
-        aHiOut2[c].c = aHiOut[c].c;
+        // 4th-order Butterworth pairs (Q = 0.5412 and 1.3066)
+        // Air Low : source 1.2 - 2.6 kHz  ->  harmonics kept above 3.4 kHz
+        aLoSrc[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 1200.0, 0.707,  0.0);
+        aLoSrcLp1[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 2600.0, 0.5412, 0.0);
+        aLoSrcLp2[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 2600.0, 1.3066, 0.0);
+        aLoOut[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 0.5412, 0.0);
+        aLoOut2[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 3400.0, 1.3066, 0.0);
+        // Air High: source 3.2 - 6 kHz    ->  harmonics kept above 9 kHz
+        aHiSrc[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 3200.0, 0.707,  0.0);
+        aHiSrcLp1[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 6000.0, 0.5412, 0.0);
+        aHiSrcLp2[c].c = ak::makeBiquad(ak::BQ::LowPass,  sr, 6000.0, 1.3066, 0.0);
+        aHiOut[c].c    = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 0.5412, 0.0);
+        aHiOut2[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 9000.0, 1.3066, 0.0);
         revHp[c].c   = ak::makeBiquad(ak::BQ::HighPass, sr, 180.0, 0.707, 0.0);
     }
     dlyWp = preWp = chWp = flWp = 0;
@@ -172,7 +181,7 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
     chPh = flPh = 0.f;
 
     filtersValid = false;
-    lastDeF = lastAirLo = lastAirHi = -1.f;
+    lastDeF = lastDeQ = lastAirLo = lastAirHi = -1.f;
     lastRevTone = -1.f;
     gateDb = gateEnv = 0.f;
     gr1176 = mk1176 = gr670F = gr670S = mk670 = deessEnv = pcGr = 0.f;
@@ -241,7 +250,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int ratioIdx = juce::jlimit(0, 4, (int) std::lround(V(P.ratio)));
     const int tcIdx = juce::jlimit(0, 5, (int) std::lround(V(P.tc)));
     const float attMs = V(P.attack), relMs = V(P.release), deess = V(P.deess);
-    const float deessF = V(P.deessf), deessR = V(P.deessr);
+    const float deessF = V(P.deessf), deessR = V(P.deessr), deessQ = V(P.deessq);
     const bool deessWide = V(P.deessmode) > 0.5f, deessListen = V(P.deesslisten) > 0.5f;
     const float airLow = V(P.airlow), airHigh = V(P.airhigh), fxv = V(P.fx);
     const int revType = juce::jlimit(0, 3, (int) std::lround(V(P.revtype)));
@@ -348,10 +357,11 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const bool deOn = deess > 0.5f || deessListen;
     const float deThr = -14.f - 0.28f * deess;
     const float deMax = 3.f + 0.15f * deessR;           // maximum reduction 3 .. 18 dB
-    if (deessF != lastDeF)
+    if (deessF != lastDeF || deessQ != lastDeQ)
     {
         lastDeF = deessF;
-        const auto bp = ak::makeBiquad(ak::BQ::BandPass, sr, (double) deessF, 1.8, 0.0);
+        lastDeQ = deessQ;
+        const auto bp = ak::makeBiquad(ak::BQ::BandPass, sr, (double) deessF, (double) deessQ, 0.0);
         deessBp[0].c = bp; deessBp[1].c = bp;
     }
     float deMaxRed = 0.f;
@@ -507,7 +517,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
 
-        // --- 6) Air exciter: strong harmonics + shelf, acting directly on the voice ---
+        // --- 6) Air exciter: harmonics + shelf, acting directly on the voice (never cuts, only adds) ---
         if (airOn)
         {
             for (int c = 0; c < nch; ++c)
@@ -515,16 +525,19 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 float s = x[c];
                 if (aLo > 0.002f)
                 {
-                    const float src = aLoSrc[c].process(x[c]);
-                    s += 0.30f * aLo * aLoOut[c].process(std::tanh(6.f * src));
+                    float src = aLoSrc[c].process(x[c]);
+                    src = aLoSrcLp2[c].process(aLoSrcLp1[c].process(src));      // source band only
+                    const float h = aLoOut2[c].process(aLoOut[c].process(std::tanh(8.f * src)));   // new harmonics only
+                    s += 0.5f * aLo * h;
                     s = aLoPeak[c].process(s);
                 }
                 if (aHi > 0.002f)
                 {
-                    const float src = aHiSrc[c].process(x[c]);
-                    const float hf = aHiOut2[c].process(aHiOut[c].process(std::tanh(8.f * src)));
-                    s += aHi * hf;
-                    s = aHiShelf[c].process(s);
+                    float src = aHiSrc[c].process(x[c]);
+                    src = aHiSrcLp2[c].process(aHiSrcLp1[c].process(src));      // 3.2 - 6 kHz source
+                    const float h = aHiOut2[c].process(aHiOut[c].process(std::tanh(10.f * src))); // harmonics above 9 kHz
+                    s += 1.3f * aHi * h;
+                    s = aHiShelf[c].process(s);                                  // +8 dB max boost, never a cut
                 }
                 x[c] = s;
             }

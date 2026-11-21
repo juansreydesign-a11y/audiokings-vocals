@@ -15,9 +15,9 @@ Vocal channel strip (VST3, Windows x64) for **FL Studio** and **Ableton Live**, 
 * **Compression** - master **Compress** + **1176** / **670** weights, 1176 ratio (4, 8, 12, 20, ALL) and 670 time constant (1-6).
 * **Pultec EQ** - Bass / Atten / Freq (25-220 Hz) and Treble / Atten / Freq (4-20 kHz).
 * **FX** - 0-50%: warm saturation, parallel compression and chorus (pop). 50-100%: distortion, flanger and chamber reverb (experimental / rock). Independent of Reverb and Delay.
-* **De-esser** (after the Pultec) - Amount, Freq (3-10 kHz), Range, Split / Wide mode, Listen, with its own reduction meter.
+* **De-esser** (after the Pultec) - Amount, Freq (3-10 kHz), Range, Bandwidth (Q), Split / Wide mode, Listen, with its own reduction meter.
 * **Reverb** (Room / Plate / Hall / **Studio** with subtle saturation, Tone, Decay, Mix) and **Delay** (tempo-synced, repeats, Tone, Mix) work in parallel.
-* **Air Low / Air High** - Fresh-Air style harmonic exciter (harmonic generation + shelf boost), acting directly on the voice.
+* **Air Low / Air High** - Fresh-Air style harmonic exciter (harmonics generated from a separate source band + shelf boost; it only adds, it never cuts), acting directly on the voice.
 * **Skins**: Digital, Technical, Analog. **Resizable window** (drag the bottom-right corner).
 * **A/B compare**, **user presets** (SAVE / DEL, stored in `%APPDATA%\Audiokings\Vocals\Presets`).
 

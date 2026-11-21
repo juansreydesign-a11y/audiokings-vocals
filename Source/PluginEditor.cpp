@@ -365,7 +365,7 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
 
     // ---- knobs ----
     struct Spec { const char* id; const char* title; const char* tip; Knob::Size size; };
-    const Spec specs[24] = {
+    const Spec specs[25] = {
         { "sens",      "LEVEL / SENS", "Input level + preamp sensitivity. Aim the loudest peaks at the OPTIMAL zone.", Knob::Big },
         { "noise",     "NOISE",        "Noise reduction (downward expander) between phrases", Knob::Small },
         { "compress",  "COMPRESS",     "Master compression amount (feeds the 1176 and the 670)", Knob::Medium },
@@ -389,7 +389,8 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
         { "output",    "OUTPUT",       "Output level", Knob::Medium },
         { "deess",     "AMOUNT",       "De-esser sensitivity: how much sibilance is reduced", Knob::Small },
         { "deessf",    "FREQ",         "Centre frequency of the sibilance, 3 - 10 kHz", Knob::Small },
-        { "deessr",    "RANGE",        "Maximum reduction (3 - 18 dB)", Knob::Small }
+        { "deessr",    "RANGE",        "Maximum reduction (3 - 18 dB)", Knob::Small },
+        { "deessq",    "BANDWIDTH",    "Width of the sibilance band (Q). Lower = wider band, higher = narrower and more surgical", Knob::Small }
     };
     for (const auto& s : specs)
     {
@@ -533,8 +534,8 @@ void MainView::resized()
     prevBtn.setBounds(h.removeFromRight(32));
 
     // ---- top zone ----
-    eqPanel = { 16.f, 72.f, 900.f, 322.f };
-    meterPanel = { 928.f, 72.f, 536.f, 322.f };
+    eqPanel = { 16.f, 72.f, 920.f, 322.f };
+    meterPanel = { 948.f, 72.f, 556.f, 322.f };
     eqPlot = eqPanel.reduced(18.f, 0.f).withTrimmedTop(46.f).withTrimmedBottom(30.f);
     lpBtn.setBounds((int) eqPanel.getRight() - 18 - 96, (int) eqPanel.getY() + 10, 96, 22);
 
@@ -542,15 +543,15 @@ void MainView::resized()
     sections.clear();
     sections.push_back({ { 16.f,   402.f, 320.f, 230.f }, "INPUT" });
     sections.push_back({ { 342.f,  402.f, 350.f, 230.f }, "COMPRESSION  -  1176 + FAIRCHILD 670" });
-    sections.push_back({ { 698.f,  402.f, 560.f, 230.f }, "PULTEC EQ" });
-    sections.push_back({ { 1264.f, 402.f, 200.f, 230.f }, "FX" });
+    sections.push_back({ { 698.f,  402.f, 580.f, 230.f }, "PULTEC EQ" });
+    sections.push_back({ { 1284.f, 402.f, 220.f, 230.f }, "FX" });
     sections.push_back({ { 16.f,   640.f, 400.f, 224.f }, "REVERB  -  PARALLEL" });
     sections.push_back({ { 422.f,  640.f, 400.f, 224.f }, "DELAY  -  PARALLEL" });
-    sections.push_back({ { 828.f,  640.f, 280.f, 224.f }, "DE-ESSER  -  AFTER PULTEC" });
-    sections.push_back({ { 1114.f, 640.f, 220.f, 224.f }, "AIR  -  EXCITER" });
-    sections.push_back({ { 1340.f, 640.f, 124.f, 224.f }, "OUT" });
+    sections.push_back({ { 828.f,  640.f, 320.f, 224.f }, "DE-ESSER  -  AFTER PULTEC" });
+    sections.push_back({ { 1154.f, 640.f, 220.f, 224.f }, "AIR  -  EXCITER" });
+    sections.push_back({ { 1380.f, 640.f, 124.f, 224.f }, "OUT" });
 
-    if (knobs.size() < 24)
+    if (knobs.size() < 25)
         return;
 
     auto put = [this](size_t i, int x, int y, int w, int hh) { knobs[i]->setBounds(x, y, w, hh); };
@@ -566,25 +567,25 @@ void MainView::resized()
     ratioBtns->setBounds(420, 586, 262, 20);
     tcBtns->setBounds(420, 608, 262, 20);
     // PULTEC
-    put(5, 712, 440, 100, 150);   put(6, 816, 458, 70, 112);   put(7, 890, 458, 70, 112);
-    put(8, 1000, 440, 100, 150);  put(9, 1104, 458, 70, 112);  put(10, 1178, 458, 70, 112);
+    put(5, 722, 440, 100, 150);   put(6, 828, 458, 70, 112);   put(7, 902, 458, 70, 112);
+    put(8, 1020, 440, 100, 150);  put(9, 1126, 458, 70, 112);  put(10, 1200, 458, 70, 112);
     // FX
-    put(11, 1284, 440, 160, 160);
-    fxBar = { 1284.f, 606.f, 160.f, 14.f };
+    put(11, 1314, 440, 160, 160);
+    fxBar = { 1314.f, 606.f, 160.f, 14.f };
     // REVERB
     revBtns->setBounds(26, 686, 92, 112);
     put(12, 128, 672, 90, 150);   put(13, 222, 672, 90, 150);  put(14, 320, 690, 80, 120);
     // DELAY
     dlyBtns->setBounds(432, 686, 92, 116);
     put(15, 534, 672, 90, 150);   put(16, 628, 672, 90, 150);  put(17, 726, 690, 80, 120);
-    // DE-ESSER
-    put(21, 836, 668, 80, 112);   put(22, 920, 668, 80, 112);  put(23, 1004, 668, 80, 112);
+    // DE-ESSER (amount, freq, range, bandwidth)
+    put(21, 834, 668, 78, 112);   put(22, 912, 668, 78, 112);  put(23, 990, 668, 78, 112);  put(24, 1068, 668, 78, 112);
     deMode->setBounds(836, 788, 130, 22);
     listenBtn.setBounds(972, 788, 80, 22);
-    deBar = { 836.f, 828.f, 252.f, 12.f };
+    deBar = { 836.f, 828.f, 296.f, 12.f };
     // AIR + OUT
-    put(18, 1120, 672, 100, 170);  put(19, 1224, 672, 100, 170);
-    put(20, 1346, 672, 112, 170);
+    put(18, 1160, 672, 100, 170);  put(19, 1264, 672, 100, 170);
+    put(20, 1386, 672, 112, 170);
 }
 
 //==============================================================================
@@ -1470,7 +1471,7 @@ void MainView::paintConsole(juce::Graphics& g)
         g.setColour(k.dim);
         g.drawText("REDUCTION", juce::Rectangle<int>(836, 812, 100, 14), juce::Justification::centredLeft);
         g.setColour(grDeEssDb > 0.2f ? k.accC : k.dim);
-        g.drawText("-" + juce::String(grDeEssDb, 1) + " dB", juce::Rectangle<int>(988, 812, 100, 14), juce::Justification::centredRight);
+        g.drawText("-" + juce::String(grDeEssDb, 1) + " dB", juce::Rectangle<int>(1032, 812, 100, 14), juce::Justification::centredRight);
 
         g.setColour(k.meterBg);
         g.fillRoundedRectangle(deBar, 4.f);

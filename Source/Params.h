@@ -79,6 +79,7 @@ inline const ParamDef kParams[] = {
     { "deess",     "De-Esser Amount",    0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
     { "deessf",    "De-Esser Freq",   3000,10000, 10,  6500, 6500, " Hz", 0, KFloat,  "" },
     { "deessr",    "De-Esser Range",     0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
+    { "deessq",    "De-Esser Bandwidth", 0.5f,   4, 0.01f, 1.5f, 1.8f, "", 2, KFloat, "" },
     { "deessmode", "De-Esser Mode",      0,    1, 1,      0,    0, "",    0, KChoice, "Split|Wide" },
     { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" }
 };
