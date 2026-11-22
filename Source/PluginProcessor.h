@@ -48,6 +48,7 @@ public:
     ak::Values getValues() const;
     void setValues(const ak::Values& v);
 
+    static juce::File getAppDataDir();          // Windows: %APPDATA%\Audiokings\Vocals   macOS: ~/Library/Application Support/Audiokings/Vocals
     static juce::File getUserPresetDir();
     juce::StringArray getUserPresetNames() const;
     bool saveUserPreset(const juce::String& name);

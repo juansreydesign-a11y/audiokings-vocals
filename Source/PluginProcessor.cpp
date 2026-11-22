@@ -941,10 +941,18 @@ void AudiokingsVocalsProcessor::loadFactoryPreset(int index)
     apvts.state.setProperty("userpreset", "", nullptr);
 }
 
+juce::File AudiokingsVocalsProcessor::getAppDataDir()
+{
+    auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+   #if JUCE_MAC
+    base = base.getChildFile("Application Support");     // JUCE returns ~/Library on macOS
+   #endif
+    return base.getChildFile("Audiokings").getChildFile("Vocals");
+}
+
 juce::File AudiokingsVocalsProcessor::getUserPresetDir()
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Audiokings").getChildFile("Vocals").getChildFile("Presets");
+    return getAppDataDir().getChildFile("Presets");
 }
 
 juce::StringArray AudiokingsVocalsProcessor::getUserPresetNames() const

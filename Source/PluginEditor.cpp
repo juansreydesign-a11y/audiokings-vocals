@@ -15,8 +15,7 @@ const float kQDef[5] = { 0.7f, 0.9f, 0.9f, 0.8f, 0.7f };
 
 juce::File skinSettingsFile()
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("Audiokings").getChildFile("Vocals").getChildFile("skin.txt");
+    return AudiokingsVocalsProcessor::getAppDataDir().getChildFile("skin.txt");
 }
 } // namespace
 

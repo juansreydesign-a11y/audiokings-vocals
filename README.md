@@ -1,7 +1,7 @@
 # Audiokings Vocals
 
-Vocal channel strip (VST3, Windows x64) for **FL Studio**, **Ableton Live**, **Cubase** and **Reaper**, built with [JUCE](https://juce.com).
-Compatibility is through the VST3 standard (FL Studio 20.8+, Live 11+, Cubase 11+, Reaper 6.20+). Presets are handled inside the plug-in, so no host re-applies them over your settings.
+Vocal channel strip for **Windows** (VST3, x64) and **macOS** (VST3 + Audio Unit, universal: Apple Silicon and Intel), for **FL Studio**, **Ableton Live**, **Cubase**, **Reaper** and, on macOS, **Logic Pro / GarageBand** (AU). Built with [JUCE](https://juce.com).
+Compatibility is through the VST3 / AU standards (FL Studio 20.8+, Live 11+, Cubase 11+, Reaper 6.20+, macOS 10.13+). Presets are handled inside the plug-in, so no host re-applies them over your settings.
 
 ## Signal chain
 
@@ -34,22 +34,47 @@ Factory presets live in `Source/Presets.h` (each one lists only what differs fro
 
 ## Build
 
-Every push to `main` builds on GitHub Actions (Actions tab -> latest run -> Artifacts -> `AudiokingsVocals-Windows`):
-the **Setup .exe** (recommended) and a zip with the VST3 and a manual `.bat` installer.
-A tag such as `v3.0.0` also creates a GitHub Release.
+Every push to `main` builds on GitHub Actions (Actions tab -> latest run -> Artifacts):
+* `AudiokingsVocals-Windows`: the **Setup .exe** (recommended) and a zip with the VST3.
+* `AudiokingsVocals-macOS`: the **.pkg installer** (recommended) and a zip with the VST3, the Audio Unit and an uninstaller.
 
-Local build (Windows):
+A tag such as `v3.5.0` also creates a GitHub Release with all the files.
+
+Local build:
 ```
+# Windows
 cmake -S . -B build -A x64
+cmake --build build --config Release
+
+# macOS (universal binary, VST3 + AU)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
 ## Install
 
-Run `AudiokingsVocals-Setup-x.y.z.exe`. It installs to `C:\Program Files\Common Files\VST3`, and automatically
-removes older versions (installer-based or manual copies) before installing. Then rescan plugins:
+**Windows** - run `AudiokingsVocals-Setup-x.y.z.exe`. It installs to `C:\Program Files\Common Files\VST3` and removes older versions automatically.
+
+**macOS** - open `AudiokingsVocals-macOS-x.y.z.pkg`. It installs
+`/Library/Audio/Plug-Ins/VST3/Audiokings Vocals.vst3` and `/Library/Audio/Plug-Ins/Components/Audiokings Vocals.component`,
+removing any previous version first. To uninstall, run `Uninstall-AudiokingsVocals.command`.
+
+If macOS says the installer "cannot be opened because it is from an unidentified developer" (builds without an Apple Developer ID):
+right-click the .pkg -> **Open**, or System Settings -> Privacy & Security -> **Open Anyway**.
+For a plug-in blocked by Gatekeeper: `sudo xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/VST3/Audiokings Vocals.vst3"`.
+
+Then rescan plugins:
 * **FL Studio** (20.8+): Options -> Manage plugins -> Find installed plugins
-* **Ableton Live** (11+): Preferences -> Plug-ins -> enable "Use VST3 Plug-in System Folders" -> Rescan
+* **Ableton Live** (11+): Preferences -> Plug-ins -> enable VST3 (Windows: "Use VST3 Plug-in System Folders") -> Rescan
+* **Cubase / Reaper**: rescan the VST3 folder
+* **Logic Pro / GarageBand** (macOS): the Audio Unit appears under Audio Units -> Audiokings (run *Reset & Rescan Selection* in the Plug-in Manager the first time)
+
+## Signing and notarization (macOS, optional)
+
+Without secrets the workflow signs ad-hoc. To produce a notarized installer, add these repository secrets
+(Settings -> Secrets and variables -> Actions): `APPLE_CERT_APPLICATION_BASE64`, `APPLE_CERT_INSTALLER_BASE64`,
+`APPLE_CERT_PASSWORD`, `APPLE_DEVELOPER_ID_APP`, `APPLE_DEVELOPER_ID_INSTALLER`, `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID`.
+An Apple Developer account is required.
 
 ## License note
 
