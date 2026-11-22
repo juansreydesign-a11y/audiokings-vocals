@@ -65,12 +65,6 @@ constexpr RevType kRev[4] = {
     { 0.30f, 0.70f,  8.f, 0.35f }    // Studio (with subtle saturation)
 };
 
-// Fairchild-style variable-mu gain reduction: soft onset, ratio increasing with level
-inline float vmGain(float over)
-{
-    return over > 0.f ? 0.85f * over * over / (over + 20.f) : 0.f;
-}
-
 // fractional read from a circular buffer, `delay` samples behind index `wp`
 inline float readFrac(const std::vector<float>& b, int wp, float delay)
 {
@@ -118,6 +112,12 @@ AudiokingsVocalsProcessor::AudiokingsVocalsProcessor()
     P.release = get("release"); P.deess = get("deess");
     P.deessf = get("deessf");   P.deessr = get("deessr");   P.deessq = get("deessq");
     P.deessmode = get("deessmode"); P.deesslisten = get("deesslisten");
+    P.deessatk = get("deessatk"); P.deessrel = get("deessrel");
+    P.mk1176 = get("mk1176"); P.auto1176 = get("auto1176"); P.mk670 = get("mk670"); P.auto670 = get("auto670");
+    P.ptube = get("ptube"); P.ptrebbw = get("ptrebbw"); P.airlf = get("airlf"); P.airhf = get("airhf");
+    P.fxsat = get("fxsat"); P.fxpc = get("fxpc"); P.fxch = get("fxch"); P.fxdist = get("fxdist");
+    P.fxfl = get("fxfl"); P.fxcham = get("fxcham");
+    P.revpre = get("revpre"); P.revwidth = get("revwidth"); P.dlywidth = get("dlywidth"); P.dlyhp = get("dlyhp");
 
     loadFactoryPreset(0);   // start on "Pop Voice"
 }
@@ -142,7 +142,7 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
     chamBuf.setSize(2, bs);
 
     const int dlySize = (int) (sr * 2.0) + 8;
-    const int preSize = (int) (sr * 0.1) + 8;
+    const int preSize = (int) (sr * 0.25) + 8;
     const int chSize = (int) (sr * 0.05) + 8;
     const int flSize = (int) (sr * 0.02) + 8;
     for (int c = 0; c < 2; ++c)
@@ -160,7 +160,9 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
         aHiSrc[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset();
         for (int k = 0; k < 4; ++k) { aLoLp[k][c].reset(); aHiLp[k][c].reset(); }
         aLoEnv[c] = aHiEnv[c] = 0.f;
-        revHp[c].reset(); wetHs[c].reset();
+        revHp[c].reset(); wetHs[c].reset(); detHp[c].reset(); lfLp[c].reset();
+        detHp[c].c = ak::makeBiquad(ak::BQ::HighPass, sr, 90.0, 0.707, 0.0);
+        lfLp[c].c  = ak::makeBiquad(ak::BQ::LowPass,  sr, 150.0, 0.707, 0.0);
 
         // The source band is cut by an 8th-order Butterworth low-pass (4 sections) so almost nothing of it
         // reaches the output band: harmonics are added only where the source has no content.
@@ -182,14 +184,15 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
     }
     dlyWp = preWp = chWp = flWp = 0;
     dlyLp[0] = dlyLp[1] = 0.f;
+    dlyHp[0] = dlyHp[1] = 0.f;
     distLp[0] = distLp[1] = 0.f;
     chPh = flPh = 0.f;
 
     filtersValid = false;
-    lastDeF = lastDeQ = lastAirLo = lastAirHi = -1.f;
+    lastDeF = lastDeQ = lastAirLo = lastAirHi = lastAirLF = lastAirHF = -1.f;
     lastRevTone = -1.f;
     gateDb = gateEnv = 0.f;
-    gr1176 = mk1176 = gr670F = gr670S = mk670 = deessEnv = pcGr = 0.f;
+    gr1176 = gr1176F = mk1176 = gr670F = gr670S = mk670 = deessEnv = pcGr = 0.f;
     lastInGain  = juce::Decibels::decibelsToGain((P.sens->load() - 50.f) * 0.36f);
     lastOutGain = juce::Decibels::decibelsToGain(P.output->load());
 }
@@ -199,7 +202,7 @@ void AudiokingsVocalsProcessor::updateFilters(const ak::EqParams& e, const ak::P
     const std::array<float, 18> nowEq { e.hpf, e.g[0], e.g[1], e.g[2], e.g[3], e.g[4],
                                         e.f[0], e.f[1], e.f[2], e.f[3], e.f[4],
                                         e.q[0], e.q[1], e.q[2], e.q[3], e.q[4], e.lpOn ? 1.f : 0.f, e.lpf };
-    const std::array<float, 6> nowP { p.bass, p.bassAtt, p.bassF, p.treb, p.trebAtt, p.trebF };
+    const std::array<float, 7> nowP { p.bass, p.bassAtt, p.bassF, p.treb, p.trebAtt, p.trebF, p.trebQ };
 
     if (filtersValid && nowEq == lastEq && nowP == lastPultec)
         return;
@@ -220,6 +223,47 @@ void AudiokingsVocalsProcessor::updateFilters(const ak::EqParams& e, const ak::P
         pBassA[c].c = ps.bAtt;
         pTrebB[c].c = ps.tBoost;
         pTrebA[c].c = ps.tAtt;
+    }
+}
+
+void AudiokingsVocalsProcessor::updateAirLow(float lf, float amt)
+{
+    static const double q8[4] = { 0.5098, 0.6013, 0.9000, 2.5629 };
+    const auto pk = ak::makeBiquad(ak::BQ::Peak,     sr, (double) lf,          0.8,    (double) (amt * 5.f));
+    const auto hp = ak::makeBiquad(ak::BQ::HighPass, sr, (double) lf * 0.375,  0.707,  0.0);
+    const auto o1 = ak::makeBiquad(ak::BQ::HighPass, sr, (double) lf * 1.06,   0.5412, 0.0);
+    const auto o2 = ak::makeBiquad(ak::BQ::HighPass, sr, (double) lf * 1.06,   1.3066, 0.0);
+    for (int c = 0; c < 2; ++c)
+    {
+        aLoPeak[c].c = pk; aLoSrc[c].c = hp; aLoOut[c].c = o1; aLoOut2[c].c = o2;
+        for (int k = 0; k < 4; ++k)
+            aLoLp[k][c].c = ak::makeBiquad(ak::BQ::LowPass, sr, (double) lf * 0.69, q8[k], 0.0);
+    }
+}
+
+void AudiokingsVocalsProcessor::updateAirHigh(float hf, float amt)
+{
+    static const double q8[4] = { 0.5098, 0.6013, 0.9000, 2.5629 };
+    const auto sh = ak::makeBiquad(ak::BQ::HighShelf, sr, (double) hf,         0.7,    (double) (amt * 8.f));
+    const auto hp = ak::makeBiquad(ak::BQ::HighPass,  sr, (double) hf * 0.34,  0.707,  0.0);
+    const auto o1 = ak::makeBiquad(ak::BQ::HighPass,  sr, (double) hf * 0.95,  0.5412, 0.0);
+    const auto o2 = ak::makeBiquad(ak::BQ::HighPass,  sr, (double) hf * 0.95,  1.3066, 0.0);
+    for (int c = 0; c < 2; ++c)
+    {
+        aHiShelf[c].c = sh; aHiSrc[c].c = hp; aHiOut[c].c = o1; aHiOut2[c].c = o2;
+        for (int k = 0; k < 4; ++k)
+            aHiLp[k][c].c = ak::makeBiquad(ak::BQ::LowPass, sr, (double) hf * 0.58, q8[k], 0.0);
+    }
+}
+
+void AudiokingsVocalsProcessor::copyScopeIn(float* destL, float* destR) const
+{
+    const int w = scopePos.load(std::memory_order_relaxed);
+    for (int i = 0; i < scopeSize; ++i)
+    {
+        const size_t k = (size_t) ((w + i) & (scopeSize - 1));
+        destL[i] = scopeInL[k];
+        destR[i] = scopeInR[k];
     }
 }
 
@@ -248,6 +292,25 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     if (nch == 0 || n == 0)
         return;
 
+    // input scope / correlation, captured before any processing
+    {
+        const float* i0 = buffer.getReadPointer(0);
+        const float* i1 = nch > 1 ? buffer.getReadPointer(1) : i0;
+        double sLR = 0.0, sLL = 0.0, sRR = 0.0;
+        int w = scopePos.load(std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i)
+        {
+            const size_t k = (size_t) ((w + i) & (scopeSize - 1));
+            scopeInL[k] = i0[i];
+            scopeInR[k] = i1[i];
+            sLR += (double) i0[i] * i1[i];
+            sLL += (double) i0[i] * i0[i];
+            sRR += (double) i1[i] * i1[i];
+        }
+        if (sLL > 1.0e-9 && sRR > 1.0e-9)
+            correlationIn.store((float) (sLR / std::sqrt(sLL * sRR)), std::memory_order_relaxed);
+    }
+
     auto V = [](std::atomic<float>* a) { return a->load(); };
 
     const float sens = V(P.sens), noise = V(P.noise), comp = V(P.compress);
@@ -263,13 +326,17 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int dlyDiv = juce::jlimit(0, 3, (int) std::lround(V(P.dlydiv)));
     const float delayAmt = V(P.delay), delayTone = V(P.delaytone), delayMixP = V(P.delaymix);
     const float outDb = V(P.output);
+    const bool auto1176 = V(P.auto1176) > 0.5f, auto670 = V(P.auto670) > 0.5f;
+    const float mk1176Manual = V(P.mk1176), mk670Manual = V(P.mk670);
+    const float ptube = V(P.ptube);
+    const float airLF = V(P.airlf), airHF = V(P.airhf);
 
     ak::EqParams ep {};
     ep.hpf = V(P.hpf);
     for (int i = 0; i < 5; ++i) { ep.g[i] = V(P.eqg[i]); ep.f[i] = V(P.eqf[i]); ep.q[i] = V(P.eqq[i]); }
     ep.lpOn = V(P.lpon) > 0.5f;
     ep.lpf = V(P.lpf);
-    const ak::PultecParams pp { V(P.pbass), V(P.pbassatt), V(P.pbassf), V(P.ptreb), V(P.ptrebatt), V(P.ptrebf) };
+    const ak::PultecParams pp { V(P.pbass), V(P.pbassatt), V(P.pbassf), V(P.ptreb), V(P.ptrebatt), V(P.ptrebf), ak::pultecQ(V(P.ptrebbw)) };
     updateFilters(ep, pp);
 
     float* ch0 = buffer.getWritePointer(0);
@@ -314,11 +381,12 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const bool allBtn = ratioIdx == 4;
     const float thrA = -4.f - 0.30f * eff1176;
     const float kneeA = allBtn ? 0.5f : 3.f;
-    const float mkA = on1176 ? 0.30f * (-thrA) * (1.f - 1.f / ratioA) : 0.f;
+    const float mkA = (auto1176 && on1176 ? 0.30f * (-thrA) * (1.f - 1.f / ratioA) : 0.f) + mk1176Manual;
     const float atkA = allBtn ? std::max(0.02f, attMs * 0.5f) : attMs;
     const float relA = allBtn ? relMs * 0.5f : relMs;
     const float cAtkA = (float) std::exp(-1.0 / (sr * (double) atkA * 0.001));
     const float cRelA = (float) std::exp(-1.0 / (sr * (double) relA * 0.001));
+    const float cRelAF = (float) std::exp(-1.0 / (sr * (double) std::max(30.f, relA * 0.25f) * 0.001));   // fast release stage
     const float fetSat = allBtn ? 0.10f : 0.025f;
 
     // ---- compressor B: Fairchild 670 (variable-mu, soft, slow) ----
@@ -327,7 +395,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     static const float kRelS[6] = { 0.f, 0.f, 0.f, 0.f, 6000.f, 10000.f };
     const bool dualB = tcIdx >= 4;
     const float thrB = -4.f - 0.25f * eff670;
-    const float mkB = on670 ? 0.85f * vmGain(-14.f - thrB + 6.f) : 0.f;
+    const float mkB = (auto670 && on670 ? 0.85f * ak::vmReduction(-14.f - thrB + 6.f) : 0.f) + mk670Manual;
     const float cAtkB = (float) std::exp(-1.0 / (sr * (double) kAtkB[tcIdx] * 0.001));
     const float cRelFB = (float) std::exp(-1.0 / (sr * (double) kRelF[tcIdx] * 0.001));
     const float cRelSB = dualB ? (float) std::exp(-1.0 / (sr * (double) kRelS[tcIdx] * 0.001)) : cRelFB;
@@ -339,23 +407,21 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     };
 
     // ---- Pultec activity ----
-    const bool pultecOn = pp.bass > 0.05f || pp.bassAtt > 0.05f || pp.treb > 0.05f || pp.trebAtt > 0.05f;
+    const bool pultecOn = pp.bass > 0.05f || pp.bassAtt > 0.05f || pp.treb > 0.05f || pp.trebAtt > 0.05f || ptube > 0.05f;
 
     // ---- Air exciter (acts directly on the voice, independent of FX) ----
     const float aLo = juce::jlimit(0.f, 1.f, airLow * 0.01f);
     const float aHi = juce::jlimit(0.f, 1.f, airHigh * 0.01f);
     const bool airOn = aLo > 0.002f || aHi > 0.002f;
-    if (std::abs(aLo - lastAirLo) > 0.001f)
+    if (std::abs(aLo - lastAirLo) > 0.001f || airLF != lastAirLF)
     {
-        lastAirLo = aLo;
-        const auto pk = ak::makeBiquad(ak::BQ::Peak, sr, 3200.0, 0.8, (double) (aLo * 5.f));
-        aLoPeak[0].c = pk; aLoPeak[1].c = pk;
+        lastAirLo = aLo; lastAirLF = airLF;
+        updateAirLow(airLF, aLo);
     }
-    if (std::abs(aHi - lastAirHi) > 0.001f)
+    if (std::abs(aHi - lastAirHi) > 0.001f || airHF != lastAirHF)
     {
-        lastAirHi = aHi;
-        const auto sh = ak::makeBiquad(ak::BQ::HighShelf, sr, 9500.0, 0.7, (double) (aHi * 8.f));
-        aHiShelf[0].c = sh; aHiShelf[1].c = sh;
+        lastAirHi = aHi; lastAirHF = airHF;
+        updateAirHigh(airHF, aHi);
     }
 
     // ---- de-esser (placed right after the Pultec): detector on a band around the sibilance frequency ----
@@ -369,15 +435,15 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         const auto bp = ak::makeBiquad(ak::BQ::BandPass, sr, (double) deessF, (double) deessQ, 0.0);
         deessBp[0].c = bp; deessBp[1].c = bp;
     }
-    float deMaxRed = 0.f;
-    const float envAtk = (float) std::exp(-1.0 / (sr * 0.0005));
-    const float envRel = (float) std::exp(-1.0 / (sr * 0.04));
+    float deMaxRed = 0.f, deEnvMax = 0.f;
+    const float envAtk = (float) std::exp(-1.0 / (sr * (double) V(P.deessatk) * 0.001));
+    const float envRel = (float) std::exp(-1.0 / (sr * (double) V(P.deessrel) * 0.001));
 
     // ---- FX macro: 0..50 = warm sat + parallel comp + chorus, 50..100 = distortion + flanger + chamber ----
     const float t = smoothStep(fxv / 50.f);
     const float u = smoothStep((fxv - 50.f) / 50.f);
-    const float satMix = 0.22f * t, pcMix = 0.30f * t, chMix = 0.32f * t;
-    const float distMix = 0.35f * u, flMix = 0.45f * u, chamMix = 0.30f * u;
+    const float satMix = 0.22f * t * V(P.fxsat) * 0.01f, pcMix = 0.30f * t * V(P.fxpc) * 0.01f, chMix = 0.32f * t * V(P.fxch) * 0.01f;
+    const float distMix = 0.35f * u * V(P.fxdist) * 0.01f, flMix = 0.45f * u * V(P.fxfl) * 0.01f, chamMix = 0.30f * u * V(P.fxcham) * 0.01f;
     const bool satOn = satMix > 0.003f, pcOn = pcMix > 0.003f, chOn = chMix > 0.003f;
     const bool distOn = distMix > 0.003f, flOn = flMix > 0.003f;
     const float chInc = 0.55f / (float) sr, flInc = 0.22f / (float) sr;
@@ -427,7 +493,8 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             for (int c = 0; c < nch; ++c) x[c] *= gg;
         }
 
-        // --- 2) 1176 ---
+        // --- 2) 1176 (FET): fast peak detector, program-dependent release, FET colour, make-up ---
+        float grA = 0.f;
         {
             float target = 0.f;
             if (on1176)
@@ -435,25 +502,22 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 float det = std::abs(x[0]);
                 if (nch > 1) det = std::max(det, std::abs(x[1]));
                 const float lvl = juce::Decibels::gainToDecibels(det, -100.f);
-                const float over = lvl - thrA;
-                float outL = lvl;
-                if (2.f * over > kneeA)
-                    outL = thrA + over / ratioA;
-                else if (2.f * over > -kneeA)
-                {
-                    const float tt = over + kneeA * 0.5f;
-                    outL = lvl + (1.f / ratioA - 1.f) * tt * tt / (2.f * kneeA);
-                }
-                target = outL - lvl;
+                target = -ak::comp1176Reduction(lvl, thrA, ratioA, kneeA);
             }
-            smoothGR(gr1176, target, cAtkA, cRelA);
+            smoothGR(gr1176, target, cAtkA, cRelA);          // slow release stage
+            smoothGR(gr1176F, target, cAtkA, cRelAF);        // fast release stage
+            const float depthA = juce::jlimit(0.f, 1.f, -gr1176 / 12.f);
+            grA = gr1176F * (1.f - depthA) + gr1176 * depthA;     // deeper reduction = slower release
             mk1176 += 0.0008f * (mkA - mk1176);
-            const float g1 = juce::Decibels::decibelsToGain(gr1176 + mk1176);
+            const float g1 = juce::Decibels::decibelsToGain(grA + mk1176);
             for (int c = 0; c < nch; ++c) x[c] *= g1;
-            if (on1176)
+            if (on1176)    // FET colour: harmonic content grows with the amount of reduction
+            {
+                const float fet = fetSat + 0.05f * depthA;
                 for (int c = 0; c < nch; ++c)
-                    x[c] += fetSat * (std::tanh(2.f * x[c]) * 0.5f - x[c]);
-            gr1176Max = std::max(gr1176Max, -gr1176);
+                    x[c] += fet * (std::tanh(2.5f * x[c]) / 2.5f - x[c]);
+            }
+            gr1176Max = std::max(gr1176Max, -grA);
         }
 
         // --- 3) Pultec EQ ---
@@ -465,18 +529,21 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 x[c] = pBassA[c].process(x[c]);
                 x[c] = pTrebB[c].process(x[c]);
                 x[c] = pTrebA[c].process(x[c]);
+                if (ptube > 0.05f)    // valve warmth of the passive EQ
+                    x[c] += ptube * 0.0035f * (std::tanh(1.8f * x[c]) / 1.8f - x[c]);
             }
         }
 
-        // --- 4) Fairchild 670 ---
+        // --- 4) Fairchild 670: variable-mu, side-chain high-pass, transformer and core colour, make-up ---
         {
             float target = 0.f;
             if (on670)
             {
-                float det = std::abs(x[0]);
-                if (nch > 1) det = std::max(det, std::abs(x[1]));
+                const float d0 = detHp[0].process(x[0]);
+                const float d1 = nch > 1 ? detHp[1].process(x[1]) : 0.f;
+                const float det = std::max(std::abs(d0), std::abs(d1));
                 const float lvl = juce::Decibels::gainToDecibels(det, -100.f);
-                target = -vmGain(lvl - thrB + 6.f);
+                target = -ak::comp670Reduction(lvl, thrB);
             }
             smoothGR(gr670F, target, cAtkB, cRelFB);
             float grB = gr670F;
@@ -492,10 +559,17 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             const float g2 = juce::Decibels::decibelsToGain(grB + mk670);
             for (int c = 0; c < nch; ++c) x[c] *= g2;
             if (on670)
+            {
+                const float depthB = juce::jlimit(0.f, 1.f, -grB / 12.f);
                 for (int c = 0; c < nch; ++c)
-                    x[c] += 0.03f * (std::tanh(1.6f * x[c]) / 1.6f - x[c]);
+                {
+                    x[c] += 0.03f * (std::tanh(1.6f * x[c]) / 1.6f - x[c]);                 // output transformer
+                    const float lf = lfLp[c].process(x[c]);                                   // core saturation (low band)
+                    x[c] += (0.02f + 0.05f * depthB) * (std::tanh(3.f * lf) / 3.f - lf);
+                }
+            }
             gr670Max = std::max(gr670Max, -grB);
-            grTotMax = std::max(grTotMax, -gr1176 - grB);
+            grTotMax = std::max(grTotMax, -grA - grB);
         }
 
         // --- 5) Graphic EQ (+ optional low-pass) ---
@@ -551,6 +625,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             const float envDb = juce::Decibels::gainToDecibels(deessEnv, -100.f);
             const float red = std::min(deMax, std::max(0.f, envDb - deThr) * 0.75f);
             deMaxRed = std::max(deMaxRed, red);
+            deEnvMax = std::max(deEnvMax, deessEnv);
             const float dg = juce::Decibels::decibelsToGain(-red);
             if (deessListen)
                 for (int c = 0; c < nch; ++c) x[c] = band[c] * 3.f;            // monitor the sibilance band
@@ -625,6 +700,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     upMax(meterGR670, gr670Max);
     upMax(meterGRTotal, grTotMax);
     upMax(meterGRDeEss, deMaxRed);
+    upMax(meterDeEssEnv, deEnvMax);
 
     // 8) chamber reverb (FX > 50%): small dense room, independent of the Reverb section
     if (chamMix > 0.003f)
@@ -668,12 +744,15 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 if (b.hasValue() && *b > 30.0) bpm = *b;
             }
         }
+        hostBpm.store((float) bpm);
         static const double kBeats[4] = { 1.0, 0.75, 0.5, 0.25 };
         const int dlySize = (int) dlyBuf[0].size();
         const int dlySamples = juce::jlimit(64, dlySize - 2, (int) (sr * 60.0 / bpm * kBeats[dlyDiv]));
         const float fb = 0.10f + 0.55f * delayAmt * 0.01f;        // Delay = amount of echo (repeats)
         const float fc = 1200.f * std::pow(8.f, tone01);          // 1.2 kHz .. 9.6 kHz
         const float a = 1.f - std::exp(-2.f * 3.14159265f * fc / (float) sr);
+        const float dW = V(P.dlywidth) * 0.01f;                                   // 1 = full ping-pong, 0 = dual mono
+        const float aHp = 1.f - std::exp(-2.f * 3.14159265f * V(P.dlyhp) / (float) sr);
 
         float* dl = dlyOut.getWritePointer(0);
         float* dr = dlyOut.getWritePointer(1);
@@ -687,10 +766,14 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             const float tL = dlyBuf[0][(size_t) rp];
             const float tR = dlyBuf[1][(size_t) rp];
 
-            dlyLp[0] += a * ((mono + fb * tR) - dlyLp[0]);
-            dlyLp[1] += a * ((fb * tL) - dlyLp[1]);
-            dlyBuf[0][(size_t) dlyWp] = dlyLp[0];
-            dlyBuf[1][(size_t) dlyWp] = dlyLp[1];
+            const float inLw = mono + fb * (dW * tR + (1.f - dW) * tL);
+            const float inRw = mono * (1.f - dW) + fb * (dW * tL + (1.f - dW) * tR);
+            dlyLp[0] += a * (inLw - dlyLp[0]);
+            dlyLp[1] += a * (inRw - dlyLp[1]);
+            dlyHp[0] += aHp * (dlyLp[0] - dlyHp[0]);
+            dlyHp[1] += aHp * (dlyLp[1] - dlyHp[1]);
+            dlyBuf[0][(size_t) dlyWp] = dlyLp[0] - dlyHp[0];
+            dlyBuf[1][(size_t) dlyWp] = dlyLp[1] - dlyHp[1];
             if (++dlyWp >= dlySize) dlyWp = 0;
 
             dl[i] = tL * dLevel;
@@ -712,7 +795,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         const bool studio = revType == 3;
         const float feed = dlyOn ? 1.2f * (1.f - tone01) : 0.f;
         const int preSize = (int) preBuf[0].size();
-        const int preSamples = juce::jlimit(0, preSize - 2, (int) (sr * rt.preMs * 0.001));
+        const int preSamples = juce::jlimit(0, preSize - 2, (int) (sr * (rt.preMs + V(P.revpre)) * 0.001));
         const float* d0 = dlyOn ? dlyOut.getReadPointer(0) : nullptr;
         const float* d1 = dlyOn ? dlyOut.getReadPointer(1) : nullptr;
         float* rl = reverbBuf.getWritePointer(0);
@@ -746,7 +829,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         rpar.damping = juce::jlimit(0.f, 1.f, rt.damp + (50.f - revTone) * 0.008f);
         rpar.wetLevel = 0.33f;
         rpar.dryLevel = 0.f;
-        rpar.width = 1.f;
+        rpar.width = V(P.revwidth) * 0.01f;
         rpar.freezeMode = 0.f;
         reverb.setParameters(rpar);
         reverb.processStereo(rl, rr, n);

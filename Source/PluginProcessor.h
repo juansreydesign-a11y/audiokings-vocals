@@ -6,6 +6,7 @@
 #include <vector>
 #include "Presets.h"
 #include "Biquad.h"
+#include "Dynamics.h"
 
 class AudiokingsVocalsProcessor : public juce::AudioProcessor
 {
@@ -62,10 +63,14 @@ public:
     std::atomic<float> meterInL { 0.f }, meterInR { 0.f };
     std::atomic<float> meterOutL { 0.f }, meterOutR { 0.f };
     std::atomic<float> meterGR1176 { 0.f }, meterGR670 { 0.f }, meterGRTotal { 0.f }, meterGRDeEss { 0.f };   // dB, positive
+    std::atomic<float> meterDeEssEnv { 0.f };      // linear level of the de-esser detection band
+    std::atomic<float> correlationIn { 1.f };
+    std::atomic<float> hostBpm { 120.f };
     std::atomic<float> correlation { 1.f };
 
     static constexpr int scopeSize = 2048;
-    void copyScope(float* destL, float* destR) const;
+    void copyScope(float* destL, float* destR) const;       // output (after the whole chain)
+    void copyScopeIn(float* destL, float* destR) const;     // input (before the chain)
     double getCurrentSampleRate() const { return sr; }
 
 private:
@@ -78,9 +83,13 @@ private:
         std::atomic<float> *revtype, *revtone, *decay, *revmix;
         std::atomic<float> *dlydiv, *delay, *delaytone, *delaymix;
         std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessq, *deessmode, *deesslisten;
+        std::atomic<float> *deessatk, *deessrel, *mk1176, *auto1176, *mk670, *auto670, *ptube, *ptrebbw, *airlf, *airhf;
+        std::atomic<float> *fxsat, *fxpc, *fxch, *fxdist, *fxfl, *fxcham, *revpre, *revwidth, *dlywidth, *dlyhp;
     } P {};
 
     void updateFilters(const ak::EqParams& e, const ak::PultecParams& p);
+    void updateAirLow(float lf, float amt);
+    void updateAirHigh(float hf, float amt);
 
     // filters
     ak::Biquad hpf[2], eq[5][2], lp1[2], lp2[2];
@@ -95,7 +104,9 @@ private:
 
     // dynamics state
     float gateDb = 0.f, gateEnv = 0.f;
-    float gr1176 = 0.f, mk1176 = 0.f;
+    float gr1176 = 0.f, gr1176F = 0.f, mk1176 = 0.f;
+    ak::Biquad detHp[2], lfLp[2];                               // 670 side-chain high-pass / core saturation low band
+    float dlyHp[2] { 0.f, 0.f };
     float gr670F = 0.f, gr670S = 0.f, mk670 = 0.f;
     float deessEnv = 0.f, pcGr = 0.f;
     float lastInGain = 1.f, lastOutGain = 1.f;
@@ -116,11 +127,11 @@ private:
     double sr = 44100.0;
     bool filtersValid = false;
     std::array<float, 18> lastEq {};
-    float lastDeF = -1.f, lastDeQ = -1.f, lastAirLo = -1.f, lastAirHi = -1.f;
-    std::array<float, 6> lastPultec {};
+    float lastDeF = -1.f, lastDeQ = -1.f, lastAirLo = -1.f, lastAirHi = -1.f, lastAirLF = -1.f, lastAirHF = -1.f;
+    std::array<float, 7> lastPultec {};
     float lastRevTone = -1.f;
 
-    std::array<float, scopeSize> scopeL {}, scopeR {};
+    std::array<float, scopeSize> scopeL {}, scopeR {}, scopeInL {}, scopeInR {};
     std::atomic<int> scopePos { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AudiokingsVocalsProcessor)

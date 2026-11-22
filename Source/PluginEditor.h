@@ -163,7 +163,17 @@ private:
     void paintBackground(juce::Graphics&);
     void paintHeader(juce::Graphics&);
     void paintPanel(juce::Graphics&, juce::Rectangle<float>, const juce::String& label);
-    void paintEq(juce::Graphics&);
+    void paintEq(juce::Graphics&);          // dispatcher: draws the active page of the big panel
+    void paintEqPage(juce::Graphics&);
+    void paintCompPage(juce::Graphics&);
+    void paintPultecPage(juce::Graphics&);
+    void paintDeEssPage(juce::Graphics&);
+    void paintAirPage(juce::Graphics&);
+    void paintFxPage(juce::Graphics&);
+    void paintSpacePage(juce::Graphics&);
+    void buildPages();
+    void setPage(int p);
+    void layoutPages();
     void paintMeters(juce::Graphics&);
     void paintConsole(juce::Graphics&);
     void paintInputLeds(juce::Graphics&);
@@ -226,6 +236,27 @@ private:
     int hoverNode = -1, dragNode = -1;
     bool dragIsQ = false;
     float qStart = 1.f;
+
+    // ---- pages of the big panel ----
+    enum Page { PgEq = 0, PgComp, PgPultec, PgDeEss, PgAir, PgFx, PgSpace, kNumPages };
+    int page = 0;
+    juce::TextButton tabBtns[kNumPages];
+    struct PageKnob { std::unique_ptr<akui::Knob> knob; int page = 0, col = 0, row = 0; };
+    std::vector<PageKnob> pageKnobs;
+    std::vector<juce::Component*> pageComps[kNumPages];
+    std::unique_ptr<akui::ChoiceButtons> pRatio, pTc, pRev, pDly, pDeMode;
+    juce::TextButton pAuto1176 { "AUTO GAIN" }, pAuto670 { "AUTO GAIN" }, pListen { "LISTEN" };
+    juce::TextButton autoBtn1176 { "AUTO" }, autoBtn670 { "AUTO" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> aPAuto1176, aPAuto670, aPListen, aCAuto1176, aCAuto670;
+    juce::TextButton scopeInBtn { "IN" }, scopeOutBtn { "OUT" };
+    int scopeSrc = 1;                                   // 0 = input, 1 = output of the whole chain
+    juce::Rectangle<int> pageGraph, pageGrid;
+    std::array<float, histN> gr1176Hist {}, gr670Hist {}, deessHist {};
+    float deessEnvDb = -100.f;
+    float sv[8] { 0.55f, 0.35f, 0.55f, 0.f, 0.5f, 0.4f, 0.f, 0.f };   // smoothed values for the room / particle view
+    std::vector<float> airDb = std::vector<float>(numPts, 0.f), deessDb = std::vector<float>(numPts, 0.f);
+    std::vector<float> scopeInL = std::vector<float>(AudiokingsVocalsProcessor::scopeSize, 0.f);
+    std::vector<float> scopeInR = std::vector<float>(AudiokingsVocalsProcessor::scopeSize, 0.f);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainView)
 };

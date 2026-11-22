@@ -10,10 +10,11 @@ Compatibility is through the VST3 standard (FL Studio 20.8+, Live 11+, Cubase 11
 
 ## Interface
 
+* **Big panel with 7 pages** (tabs): **EQ**, **COMP** (transfer curves, GR history, attack / release, make-up), **PULTEC** (detailed curve, tube, treble bandwidth), **DE-ESS** (sibilance band, threshold, reduction), **AIR** (source band -> harmonics), **FX** (the six effects with individual trims) and **SPACE** (animated room / particle sphere for reverb and delay, plus detailed parameters).
 * **EQ live response** - 5 draggable nodes (Low, Low-Mid, High-Mid, Presence, Air) over a real-time spectrum. Drag = frequency / gain, **scroll wheel or Shift+drag = Q (bandwidth)**, double-click = reset. Plus a draggable **low-pass** handle (on/off button). The Pultec curve is overlaid in gold.
-* **Meters** - input / 1176 GR / 670 GR / output, **vectorscope**, stereo correlation and the overall **Gain Reduction** panel with history.
+* **Meters** - input / 1176 GR / 670 GR / output, **vectorscope with IN / OUT selector** (before the chain or after the whole chain), stereo correlation and the overall **Gain Reduction** panel with history.
 * **Input** - big **Level / Sens** knob with a green-yellow-red LED meter and OPTIMAL zone, plus **Noise** reduction.
-* **Compression** - master **Compress** + **1176** / **670** weights, 1176 ratio (4, 8, 12, 20, ALL) and 670 time constant (1-6).
+* **Compression** - master **Compress** + **1176** / **670** weights, a **Make-up** knob and **AUTO** gain button after each compressor, 1176 ratio (4, 8, 12, 20, ALL) and 670 time constant (1-6).
 * **Pultec EQ** - Bass / Atten / Freq (25-220 Hz) and Treble / Atten / Freq (4-20 kHz).
 * **FX** - 0-50%: warm saturation, parallel compression and chorus (pop). 50-100%: distortion, flanger and chamber reverb (experimental / rock). Independent of Reverb and Delay.
 * **De-esser** (after the Air exciter) - Amount, Freq (3-10 kHz), Range, Bandwidth (Q), Split / Wide mode, Listen, with its own reduction meter.

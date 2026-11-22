@@ -81,7 +81,32 @@ inline const ParamDef kParams[] = {
     { "deessr",    "De-Esser Range",     0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
     { "deessq",    "De-Esser Bandwidth", 0.5f,   4, 0.01f, 1.5f, 1.8f, "", 2, KFloat, "" },
     { "deessmode", "De-Esser Mode",      0,    1, 1,      0,    0, "",    0, KChoice, "Split|Wide" },
-    { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" }
+    { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" },
+    { "deessatk",  "De-Esser Attack",  0.1f,  20, 0.01f,   1,  0.5f, " ms", 2, KFloat, "" },
+    { "deessrel",  "De-Esser Release",   5,  200, 0.1f,   40,   40, " ms", 0, KFloat,  "" },
+    // ---- compressor make-up (after each compressor) ----
+    { "mk1176",    "1176 Make-up",     -12,   18, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "auto1176",  "1176 Auto Gain",     0,    1, 1,      0,    1, "",    0, KBool,   "" },
+    { "mk670",     "670 Make-up",      -12,   18, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "auto670",   "670 Auto Gain",      0,    1, 1,      0,    1, "",    0, KBool,   "" },
+    // ---- Pultec extras ----
+    { "ptube",     "Pultec Tube",        0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "ptrebbw",   "Pultec Treble Bandwidth", 0, 100, 0.1f, 0,  55, " %",  0, KFloat,  "" },
+    // ---- Air exciter frequencies ----
+    { "airlf",     "Air Low Freq",    2000, 5000, 10,   3200, 3200, " Hz", 0, KFloat,  "" },
+    { "airhf",     "Air High Freq",   6000,14000, 10,   9500, 9500, " Hz", 0, KFloat,  "" },
+    // ---- FX per-effect trims ----
+    { "fxsat",     "FX Saturation",      0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxpc",      "FX Parallel Comp",   0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxch",      "FX Chorus",          0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxdist",    "FX Distortion",      0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxfl",      "FX Flanger",         0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxcham",    "FX Chamber",         0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    // ---- reverb / delay extras ----
+    { "revpre",    "Reverb Pre-Delay",   0,  100, 0.1f,   0,    0, " ms", 0, KFloat,  "" },
+    { "revwidth",  "Reverb Width",       0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "dlywidth",  "Delay Width",        0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "dlyhp",     "Delay High-Pass",   20,  600, 1,    120,   20, " Hz", 0, KFloat,  "" }
 };
 
 constexpr int kNumParams = (int) (sizeof(kParams) / sizeof(kParams[0]));

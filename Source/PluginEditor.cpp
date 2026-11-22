@@ -365,7 +365,7 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
 
     // ---- knobs ----
     struct Spec { const char* id; const char* title; const char* tip; Knob::Size size; };
-    const Spec specs[25] = {
+    const Spec specs[27] = {
         { "sens",      "LEVEL / SENS", "Input level + preamp sensitivity. Aim the loudest peaks at the OPTIMAL zone.", Knob::Big },
         { "noise",     "NOISE",        "Noise reduction (downward expander) between phrases", Knob::Small },
         { "compress",  "COMPRESS",     "Master compression amount (feeds the 1176 and the 670)", Knob::Medium },
@@ -390,7 +390,9 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
         { "deess",     "AMOUNT",       "De-esser sensitivity: how much sibilance is reduced", Knob::Small },
         { "deessf",    "FREQ",         "Centre frequency of the sibilance, 3 - 10 kHz", Knob::Small },
         { "deessr",    "RANGE",        "Maximum reduction (3 - 18 dB)", Knob::Small },
-        { "deessq",    "BANDWIDTH",    "Width of the sibilance band (Q). Lower = wider band, higher = narrower and more surgical", Knob::Small }
+        { "deessq",    "BANDWIDTH",    "Width of the sibilance band (Q). Lower = wider band, higher = narrower and more surgical", Knob::Small },
+        { "mk1176",    "MAKEUP",       "Make-up gain after the 1176 (added to the automatic compensation)", Knob::Small },
+        { "mk670",     "MAKEUP",       "Make-up gain after the 670 (added to the automatic compensation)", Knob::Small }
     };
     for (const auto& s : specs)
     {
@@ -414,6 +416,8 @@ MainView::MainView(AudiokingsVocalsProcessor& p) : proc(p)
         addAndMakeVisible(c);
         c->setAlpha(0.f);
     }
+
+    buildPages();
 
     scopeImg = juce::Image(juce::Image::RGB, 150, 150, true);
     applySkin(skinId);
@@ -444,6 +448,11 @@ void MainView::applySkin(int id)
     {
         k->setLabelColour(S().dim);
         k->setValueColour(S().text);
+    }
+    for (auto& pk : pageKnobs)
+    {
+        pk.knob->setLabelColour(S().dim);
+        pk.knob->setValueColour(S().text);
     }
     sendLookAndFeelChange();
     repaint();
@@ -536,22 +545,22 @@ void MainView::resized()
     // ---- top zone ----
     eqPanel = { 16.f, 72.f, 920.f, 322.f };
     meterPanel = { 948.f, 72.f, 556.f, 322.f };
-    eqPlot = eqPanel.reduced(18.f, 0.f).withTrimmedTop(46.f).withTrimmedBottom(30.f);
-    lpBtn.setBounds((int) eqPanel.getRight() - 18 - 96, (int) eqPanel.getY() + 10, 96, 22);
+    eqPlot = eqPanel.reduced(18.f, 0.f).withTrimmedTop(62.f).withTrimmedBottom(30.f);
+    lpBtn.setBounds((int) eqPanel.getRight() - 18 - 96, (int) eqPanel.getY() + 8, 96, 24);
 
     // ---- console sections ----
     sections.clear();
     sections.push_back({ { 16.f,   402.f, 320.f, 230.f }, "INPUT" });
-    sections.push_back({ { 342.f,  402.f, 350.f, 230.f }, "COMPRESSION  -  1176 + FAIRCHILD 670" });
-    sections.push_back({ { 698.f,  402.f, 580.f, 230.f }, "PULTEC EQ" });
-    sections.push_back({ { 1284.f, 402.f, 220.f, 230.f }, "FX" });
+    sections.push_back({ { 342.f,  402.f, 450.f, 230.f }, "COMPRESSION  -  1176 + FAIRCHILD 670" });
+    sections.push_back({ { 798.f,  402.f, 520.f, 230.f }, "PULTEC EQ" });
+    sections.push_back({ { 1324.f, 402.f, 180.f, 230.f }, "FX" });
     sections.push_back({ { 16.f,   640.f, 400.f, 224.f }, "REVERB  -  PARALLEL" });
     sections.push_back({ { 422.f,  640.f, 400.f, 224.f }, "DELAY  -  PARALLEL" });
     sections.push_back({ { 828.f,  640.f, 320.f, 224.f }, "DE-ESSER  -  AFTER AIR" });
     sections.push_back({ { 1154.f, 640.f, 220.f, 224.f }, "AIR  -  EXCITER" });
     sections.push_back({ { 1380.f, 640.f, 124.f, 224.f }, "OUT" });
 
-    if (knobs.size() < 25)
+    if (knobs.size() < 27)
         return;
 
     auto put = [this](size_t i, int x, int y, int w, int hh) { knobs[i]->setBounds(x, y, w, hh); };
@@ -560,18 +569,20 @@ void MainView::resized()
     put(0, 24, 428, 150, 196);
     ledRect = { 182.f, 440.f, 52.f, 178.f };
     put(1, 246, 468, 80, 112);
-    // COMPRESSION
-    put(2, 350, 436, 110, 140);
-    put(3, 466, 452, 84, 110);
-    put(4, 554, 452, 84, 110);
-    ratioBtns->setBounds(420, 586, 262, 20);
-    tcBtns->setBounds(420, 608, 262, 20);
+    // COMPRESSION: master, then 1176 + make-up and 670 + make-up, each with its auto-gain button
+    put(2, 348, 436, 108, 134);
+    put(3, 462, 448, 76, 108);   put(25, 540, 448, 76, 108);
+    put(4, 624, 448, 76, 108);   put(26, 702, 448, 76, 108);
+    autoBtn1176.setBounds(462, 560, 154, 18);
+    autoBtn670.setBounds(624, 560, 154, 18);
+    ratioBtns->setBounds(420, 584, 358, 20);
+    tcBtns->setBounds(420, 606, 358, 20);
     // PULTEC
-    put(5, 722, 440, 100, 150);   put(6, 828, 458, 70, 112);   put(7, 902, 458, 70, 112);
-    put(8, 1020, 440, 100, 150);  put(9, 1126, 458, 70, 112);  put(10, 1200, 458, 70, 112);
+    put(5, 804, 440, 100, 150);   put(6, 904, 458, 70, 112);   put(7, 976, 458, 70, 112);
+    put(8, 1066, 440, 100, 150);  put(9, 1166, 458, 70, 112);  put(10, 1238, 458, 70, 112);
     // FX
-    put(11, 1314, 440, 160, 160);
-    fxBar = { 1314.f, 606.f, 160.f, 14.f };
+    put(11, 1344, 440, 140, 160);
+    fxBar = { 1344.f, 606.f, 140.f, 14.f };
     // REVERB
     revBtns->setBounds(26, 686, 92, 112);
     put(12, 128, 672, 90, 150);   put(13, 222, 672, 90, 150);  put(14, 320, 690, 80, 120);
@@ -586,6 +597,12 @@ void MainView::resized()
     // AIR + OUT
     put(18, 1160, 672, 100, 170);  put(19, 1264, 672, 100, 170);
     put(20, 1386, 672, 112, 170);
+
+    // vectorscope source selector (IN = before the chain, OUT = after the whole chain)
+    scopeInBtn.setBounds(1230, 118, 44, 22);
+    scopeOutBtn.setBounds(1230, 144, 44, 22);
+
+    layoutPages();
 }
 
 //==============================================================================
@@ -616,6 +633,7 @@ juce::Point<float> MainView::nodePos(int i) const
 
 int MainView::hitNode(juce::Point<float> p) const
 {
+    if (page != PgEq) return -1;
     int best = -1;
     float bestD = 16.f * 16.f;
     for (int i = 0; i < 6; ++i)
@@ -753,12 +771,20 @@ void MainView::timerCallback()
     fall(gr670Db, proc.meterGR670.exchange(0.f));
     fall(grDb, proc.meterGRTotal.exchange(0.f));
     fall(grDeEssDb, proc.meterGRDeEss.exchange(0.f));
+    {
+        const float e = juce::Decibels::gainToDecibels(proc.meterDeEssEnv.exchange(0.f), -100.f);
+        deessEnvDb = e > deessEnvDb ? e : std::max(-100.f, deessEnvDb - 0.8f);
+    }
     grHist[(size_t) histPos] = grDb;
+    gr1176Hist[(size_t) histPos] = gr1176Db;
+    gr670Hist[(size_t) histPos] = gr670Db;
+    deessHist[(size_t) histPos] = grDeEssDb;
     histPos = (histPos + 1) % histN;
 
-    corrSmooth += (proc.correlation.load() - corrSmooth) * 0.15f;
+    corrSmooth += ((scopeSrc == 0 ? proc.correlationIn.load() : proc.correlation.load()) - corrSmooth) * 0.15f;
 
     proc.copyScope(scopeL.data(), scopeR.data());
+    proc.copyScopeIn(scopeInL.data(), scopeInR.data());
     updateSpectrum();
     updateCurve();
     updateVectorscope();
@@ -775,6 +801,15 @@ void MainView::timerCallback()
         c->setAlpha(a0);
     }
     listenBtn.setAlpha(a0);
+
+    for (auto& pk : pageKnobs) { pk.knob->tick(); pk.knob->setAlpha(a0); }
+    for (auto* c : { pRatio.get(), pTc.get(), pRev.get(), pDly.get(), pDeMode.get() })
+    {
+        c->sync();
+        c->setAlpha(a0);
+    }
+    scopeInBtn.setToggleState(scopeSrc == 0, juce::dontSendNotification);
+    scopeOutBtn.setToggleState(scopeSrc == 1, juce::dontSendNotification);
 
     syncPresetBox();
     const int slot = proc.getABSlot();
@@ -830,8 +865,15 @@ void MainView::updateCurve()
     const auto e = ak::makeEq(sr, ep);
 
     const ak::PultecParams pp { getP("pbass"), getP("pbassatt"), getP("pbassf"),
-                                getP("ptreb"), getP("ptrebatt"), getP("ptrebf") };
+                                getP("ptreb"), getP("ptrebatt"), getP("ptrebf"), ak::pultecQ(getP("ptrebbw")) };
     const auto ps = ak::makePultec(sr, pp);
+
+    const float aLo = getP("airlow") * 0.01f, aHi = getP("airhigh") * 0.01f;
+    const auto airPk = ak::makeBiquad(ak::BQ::Peak, sr, (double) getP("airlf"), 0.8, (double) (aLo * 5.f));
+    const auto airSh = ak::makeBiquad(ak::BQ::HighShelf, sr, (double) getP("airhf"), 0.7, (double) (aHi * 8.f));
+    const auto deBp = ak::makeBiquad(ak::BQ::BandPass, sr, (double) getP("deessf"), (double) getP("deessq"), 0.0);
+    const bool deWide = getP("deessmode") > 0.5f;
+    const double dg = (double) juce::Decibels::decibelsToGain(-grDeEssDb);
 
     for (int i = 0; i < numPts; ++i)
     {
@@ -844,6 +886,12 @@ void MainView::updateCurve()
         const double pm = ak::magnitudeAt(ps.bBoost, f, sr) * ak::magnitudeAt(ps.bAtt, f, sr)
                         * ak::magnitudeAt(ps.tBoost, f, sr) * ak::magnitudeAt(ps.tAtt, f, sr);
         pultecDb[(size_t) i] = (float) (20.0 * std::log10(std::max(pm, 1.0e-6)));
+
+        const double am = ak::magnitudeAt(airPk, f, sr) * ak::magnitudeAt(airSh, f, sr);
+        airDb[(size_t) i] = (float) (20.0 * std::log10(std::max(am, 1.0e-6)));
+
+        const double dm = deWide ? dg : 1.0 - (1.0 - dg) * ak::magnitudeAt(deBp, f, sr);
+        deessDb[(size_t) i] = (float) (20.0 * std::log10(std::max(dm, 1.0e-6)));
     }
 }
 
@@ -856,12 +904,14 @@ void MainView::updateVectorscope()
     ig.setColour(juce::Colour(0xff080a14).withAlpha(0.22f));
     ig.fillAll();
 
+    const auto& srcL = scopeSrc == 0 ? scopeInL : scopeL;
+    const auto& srcR = scopeSrc == 0 ? scopeInR : scopeR;
     juce::Path path;
     const int N = 600;
     for (int k = 0; k < N; ++k)
     {
         const size_t idx = (size_t) (AudiokingsVocalsProcessor::scopeSize - N + k);
-        const float L = scopeL[idx], R = scopeR[idx];
+        const float L = srcL[idx], R = srcR[idx];
         const float x = juce::jlimit(-1.f, 1.f, (R - L) * 0.7071f * 2.5f);
         const float y = juce::jlimit(-1.f, 1.f, (L + R) * 0.7071f * 2.5f);
         const float px = cx + x * rad, py = cy - y * rad;
@@ -1011,24 +1061,27 @@ void MainView::paintHeader(juce::Graphics& g)
     }
 }
 
-void MainView::paintEq(juce::Graphics& g)
+void MainView::paintEqPage(juce::Graphics& g)
 {
     const auto& k = S();
-    paintPanel(g, eqPanel, "EQ  -  LIVE RESPONSE");
 
     // legend + hint
     g.setFont(mkFont(10.f));
-    const float ly = eqPanel.getY() + 21.f;
-    g.setColour(k.accA);
-    g.drawLine(eqPanel.getX() + 20.f, ly, eqPanel.getX() + 38.f, ly, 2.f);
+    const float ly = eqPanel.getY() + 47.f;
+    struct Leg { const char* name; juce::Colour col; float w; };
+    const Leg legs[4] = { { "EQ", k.accA, 2.f }, { "PULTEC", k.gold, 1.4f }, { "AIR", k.ok, 1.4f }, { "DE-ESS", k.hot, 1.4f } };
+    float lx = eqPanel.getX() + 20.f;
+    for (const auto& l : legs)
+    {
+        g.setColour(l.col);
+        g.drawLine(lx, ly, lx + 18.f, ly, l.w);
+        g.setColour(k.dim);
+        g.drawText(l.name, juce::Rectangle<int>((int) lx + 22, (int) ly - 7, 54, 14), juce::Justification::centredLeft);
+        lx += 82.f;
+    }
     g.setColour(k.dim);
-    g.drawText("EQ", juce::Rectangle<int>((int) eqPanel.getX() + 42, (int) ly - 7, 30, 14), juce::Justification::centredLeft);
-    g.setColour(k.gold);
-    g.drawLine(eqPanel.getX() + 76.f, ly, eqPanel.getX() + 94.f, ly, 1.4f);
-    g.setColour(k.dim);
-    g.drawText("PULTEC", juce::Rectangle<int>((int) eqPanel.getX() + 98, (int) ly - 7, 60, 14), juce::Justification::centredLeft);
-    g.drawText("drag = freq / gain   -   scroll or Shift+drag = Q   -   double-click = reset",
-               juce::Rectangle<int>((int) eqPanel.getX() + 200, (int) ly - 7, 520, 14), juce::Justification::centredLeft);
+    g.drawText("drag = freq / gain  -  scroll or Shift+drag = Q  -  double-click = reset",
+               juce::Rectangle<int>((int) lx + 6, (int) ly - 7, 500, 14), juce::Justification::centredLeft);
 
     const auto plot = eqPlot;
 
@@ -1101,6 +1154,35 @@ void MainView::paintEq(juce::Graphics& g)
         }
         g.setColour(k.gold.withAlpha(0.9f));
         g.strokePath(pc, juce::PathStrokeType(1.4f));
+    }
+
+    // effect of the Air exciter (shelf + presence) and of the de-esser (live reduction)
+    {
+        juce::Path ap, dp;
+        for (int i = 0; i < numPts; ++i)
+        {
+            const float x = plot.getX() + plot.getWidth() * (float) i / (float) (numPts - 1);
+            const float ya = yOf(airDb[(size_t) i]), yd = yOf(deessDb[(size_t) i]);
+            if (i == 0) { ap.startNewSubPath(x, ya); dp.startNewSubPath(x, yd); }
+            else        { ap.lineTo(x, ya);          dp.lineTo(x, yd); }
+        }
+        juce::Path af(ap);
+        af.lineTo(plot.getRight(), plot.getCentreY());
+        af.lineTo(plot.getX(), plot.getCentreY());
+        af.closeSubPath();
+        g.setColour(k.ok.withAlpha(0.14f));
+        g.fillPath(af);
+        g.setColour(k.ok.withAlpha(0.95f));
+        g.strokePath(ap, juce::PathStrokeType(1.4f));
+
+        juce::Path df(dp);
+        df.lineTo(plot.getRight(), plot.getCentreY());
+        df.lineTo(plot.getX(), plot.getCentreY());
+        df.closeSubPath();
+        g.setColour(k.hot.withAlpha(0.22f));
+        g.fillPath(df);
+        g.setColour(k.hot.withAlpha(0.95f));
+        g.strokePath(dp, juce::PathStrokeType(1.4f));
     }
 
     juce::Path curve;
@@ -1459,15 +1541,15 @@ void MainView::paintConsole(juce::Graphics& g)
 
     g.setColour(k.dim);
     g.setFont(mkFont(9.5f, true).withExtraKerningFactor(0.15f));
-    g.drawText("1176 RATIO", juce::Rectangle<int>(350, 586, 66, 20), juce::Justification::centredLeft);
-    g.drawText("670 TIME",   juce::Rectangle<int>(350, 608, 66, 20), juce::Justification::centredLeft);
+    g.drawText("1176 RATIO", juce::Rectangle<int>(350, 584, 66, 20), juce::Justification::centredLeft);
+    g.drawText("670 TIME",   juce::Rectangle<int>(350, 606, 66, 20), juce::Justification::centredLeft);
 
     // Pultec sub-groups
     g.setColour(k.gold.withAlpha(0.85f));
-    g.drawText("LOW  -  25 - 220 Hz",  juce::Rectangle<int>(716, 424, 220, 12), juce::Justification::centredLeft);
-    g.drawText("HIGH  -  4 - 20 kHz",  juce::Rectangle<int>(1004, 424, 220, 12), juce::Justification::centredLeft);
+    g.drawText("LOW  -  25 - 220 Hz",  juce::Rectangle<int>(808, 424, 220, 12), juce::Justification::centredLeft);
+    g.drawText("HIGH  -  4 - 20 kHz",  juce::Rectangle<int>(1070, 424, 220, 12), juce::Justification::centredLeft);
     g.setColour(juce::Colours::white.withAlpha(0.08f));
-    g.drawVerticalLine(980, 430.f, 620.f);
+    g.drawVerticalLine(1056, 430.f, 620.f);
 
     g.setColour(k.dim);
     g.drawText("TYPE", juce::Rectangle<int>(26, 668, 92, 14), juce::Justification::centredLeft);

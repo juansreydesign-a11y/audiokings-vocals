@@ -133,6 +133,7 @@ inline EqSet makeEq(double sr, const EqParams& p)
 struct PultecParams
 {
     float bass, bassAtt, bassF, treb, trebAtt, trebF;   // amounts 0..100, freqs in Hz
+    float trebQ;                                       // treble boost bandwidth
 };
 
 struct PultecSet
@@ -145,7 +146,7 @@ inline PultecSet makePultec(double sr, const PultecParams& p)
     PultecSet s;
     s.bBoost = makeBiquad(BQ::LowShelf,  sr, p.bassF,        0.9,  p.bass    * 0.14);
     s.bAtt   = makeBiquad(BQ::LowShelf,  sr, p.bassF * 2.2,  0.5, -p.bassAtt * 0.14);
-    s.tBoost = makeBiquad(BQ::Peak,      sr, p.trebF,        0.55, p.treb    * 0.14);
+    s.tBoost = makeBiquad(BQ::Peak,      sr, p.trebF,        p.trebQ, p.treb    * 0.14);
     s.tAtt   = makeBiquad(BQ::HighShelf, sr, p.trebF * 1.35, 0.6, -p.trebAtt * 0.14);
     return s;
 }
