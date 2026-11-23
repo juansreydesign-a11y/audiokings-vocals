@@ -9,7 +9,7 @@ endif()
 # Static MSVC runtime: the plugin runs on any Windows PC without installing the VC++ redistributable
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(AudiokingsVocals VERSION 3.5.0 LANGUAGES C CXX)
+project(AudiokingsVocals VERSION 3.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

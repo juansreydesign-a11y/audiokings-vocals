@@ -69,6 +69,12 @@ void MainView::buildPages()
     addK(PgComp, "mk1176",   "1176 MAKEUP", "Make-up gain after the 1176 (added to the automatic compensation)", 1, 1);
     addK(PgComp, "mk670",    "670 MAKEUP",  "Make-up gain after the 670 (added to the automatic compensation)", 2, 1);
     // PULTEC
+    addK(PgPultec, "meqlm",   "LM BOOST", "Low-mid peak boost (200-1000 Hz)", 4, 0);
+    addK(PgPultec, "meqlmf",  "LM FREQ",  "Low-mid peak frequency", 5, 0);
+    addK(PgPultec, "mequm",   "MID DIP",  "Mid-range attenuation (200-1500 Hz)", 4, 1);
+    addK(PgPultec, "mequmf",  "UM FREQ",  "Upper-mid dip frequency", 5, 1);
+    addK(PgPultec, "meqhm",   "HM BOOST", "High-mid peak boost (1500-5000 Hz)", 6, 0);
+    addK(PgPultec, "meqhmf",  "HM FREQ",  "High-mid peak frequency", 6, 1);
     addK(PgPultec, "pbass",    "BASS",      "Low boost", 0, 0);
     addK(PgPultec, "pbassatt", "ATTEN",     "Low attenuation", 1, 0);
     addK(PgPultec, "pbassf",   "FREQ",      "Bass frequency, 25 - 220 Hz", 2, 0);
@@ -78,6 +84,8 @@ void MainView::buildPages()
     addK(PgPultec, "ptrebf",   "FREQ",      "Treble frequency, 4 - 20 kHz", 2, 1);
     addK(PgPultec, "ptrebbw",  "BANDWIDTH", "Width of the treble boost", 3, 1);
     // DE-ESSER
+    addK(PgDeEss, "deessglo",  "GUARD LO", "High-pass before de-esser: protects bass from being detected", 4, 0);
+    addK(PgDeEss, "deessguhi", "GUARD HI", "Low-pass before de-esser: protects highs above the sibilance zone", 5, 0);
     addK(PgDeEss, "deess",    "AMOUNT",    "Sensitivity of the de-esser", 0, 0);
     addK(PgDeEss, "deessf",   "FREQ",      "Centre frequency of the sibilance", 1, 0);
     addK(PgDeEss, "deessr",   "RANGE",     "Maximum reduction", 2, 0);
@@ -113,7 +121,12 @@ void MainView::buildPages()
     pRatio  = std::make_unique<ChoiceButtons>(proc.apvts, "ratio1176", juce::StringArray { "4", "8", "12", "20", "ALL" }, false, "1176 ratio");
     pTc     = std::make_unique<ChoiceButtons>(proc.apvts, "tc670", juce::StringArray { "1", "2", "3", "4", "5", "6" }, false, "Fairchild 670 time constant");
     pRev    = std::make_unique<ChoiceButtons>(proc.apvts, "revtype", juce::StringArray { "ROOM", "PLATE", "HALL", "STUDIO" }, false, "Reverb type");
-    pDly    = std::make_unique<ChoiceButtons>(proc.apvts, "delaydiv", juce::StringArray { "1/4", "1/8 DOT", "1/8", "1/16" }, false, "Delay time (tempo-synced)");
+    pDly    = std::make_unique<ChoiceButtons>(proc.apvts, "delaydiv", juce::StringArray { "1/2", "1/4", "1/8 DOT", "1/8", "1/16" }, false, "Delay time (tempo-synced)");
+    pMeq5On.setClickingTogglesState(true);
+    pMeq5On.setTooltip("Enable the Pultec MEQ-5 Mid-Range Equalizer");
+    aMeq5On = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(proc.apvts, "meq5on", pMeq5On);
+    addAndMakeVisible(pMeq5On);
+    pageComps[PgPultec].push_back(&pMeq5On);
     pDeMode = std::make_unique<ChoiceButtons>(proc.apvts, "deessmode", juce::StringArray { "SPLIT", "WIDE" }, true, "Split = only the sibilant band is reduced. Wide = whole signal");
     for (auto* c : { pRatio.get(), pTc.get() })              { addAndMakeVisible(c); pageComps[PgComp].push_back(c); }
     for (auto* c : { pRev.get(), pDly.get() })               { addAndMakeVisible(c); pageComps[PgSpace].push_back(c); }
@@ -184,6 +197,7 @@ void MainView::layoutPages()
 
     // COMP page extras
     const int row1y = pageGrid.getY() + 108;
+    pMeq5On.setBounds(pageGrid.getX() + 4 * 72, pageGrid.getY() - 2, 100, 22);
     pAuto1176.setBounds(pageGrid.getX() + 3 * 90 + 2, row1y + 8, 86, 28);
     pAuto670.setBounds(pageGrid.getX() + 3 * 90 + 2, row1y + 44, 86, 28);
     pRatio->setBounds(pageGrid.getX() + 64, pageGrid.getY() + 220, 296, 22);
@@ -882,8 +896,8 @@ void MainView::paintSpacePage(juce::Graphics& g)
     {
         const float fb = 0.10f + 0.55f * dRep;
         const int nEcho = 2 + (int) std::round(fb * 6.f);
-        static const float mult[4] = { 1.f, 0.75f, 0.5f, 0.25f };
-        const int div = juce::jlimit(0, 3, (int) std::lround(getP("delaydiv")));
+        static const float mult[5] = { 2.f, 1.f, 0.75f, 0.5f, 0.25f };
+        const int div = juce::jlimit(0, 4, (int) std::lround(getP("delaydiv")));
         const float bpm = std::max(30.f, proc.hostBpm.load());
         const float T = juce::jlimit(0.12f, 2.f, 60.f / bpm * mult[div]);
         const float tpos = std::fmod(phase / T, (float) nEcho);

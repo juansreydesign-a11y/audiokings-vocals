@@ -129,6 +129,30 @@ inline EqSet makeEq(double sr, const EqParams& p)
 }
 
 // ---------------------------------------------------------------------------
+// Pultec MEQ-5 Mid-Range Equalizer
+// LM Freq  200 - 1000 Hz  peak boost  (Low Midrange)
+// UM Freq  200 - 1500 Hz  dip         (Upper Midrange Attenuation)
+// HM Freq  1500 - 5000 Hz peak boost  (High Midrange)
+struct Meq5Params
+{
+    float lmBoost, lmF, umAtt, umF, hmBoost, hmF;  // boost/att 0..100, freqs in Hz
+};
+
+struct Meq5Set
+{
+    BiquadCoeffs lm, um, hm;
+};
+
+inline Meq5Set makeMeq5(double sr, const Meq5Params& p)
+{
+    Meq5Set s;
+    s.lm = makeBiquad(BQ::Peak, sr, p.lmF, 1.5, (double) p.lmBoost * 0.14);
+    s.um = makeBiquad(BQ::Peak, sr, p.umF, 1.0, -(double) p.umAtt  * 0.12);
+    s.hm = makeBiquad(BQ::Peak, sr, p.hmF, 1.2, (double) p.hmBoost * 0.14);
+    return s;
+}
+
+// ---------------------------------------------------------------------------
 // Pultec-style passive EQ (after the 1176): boost + attenuation at the same frequency
 struct PultecParams
 {

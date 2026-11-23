@@ -245,6 +245,8 @@ private:
     std::vector<PageKnob> pageKnobs;
     std::vector<juce::Component*> pageComps[kNumPages];
     std::unique_ptr<akui::ChoiceButtons> pRatio, pTc, pRev, pDly, pDeMode;
+    juce::TextButton pMeq5On { "MEQ-5 ON" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> aMeq5On;
     juce::TextButton pAuto1176 { "AUTO GAIN" }, pAuto670 { "AUTO GAIN" }, pListen { "LISTEN" };
     juce::TextButton autoBtn1176 { "AUTO" }, autoBtn670 { "AUTO" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> aPAuto1176, aPAuto670, aPListen, aCAuto1176, aCAuto670;

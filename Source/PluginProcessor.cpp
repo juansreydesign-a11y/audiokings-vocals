@@ -111,12 +111,15 @@ AudiokingsVocalsProcessor::AudiokingsVocalsProcessor()
     P.output = get("output");   P.hpf = get("hpf");         P.attack = get("attack");
     P.release = get("release"); P.deess = get("deess");
     P.deessf = get("deessf");   P.deessr = get("deessr");   P.deessq = get("deessq");
+    P.deessglo = get("deessglo"); P.deessguhi = get("deessguhi");
     P.deessmode = get("deessmode"); P.deesslisten = get("deesslisten");
     P.deessatk = get("deessatk"); P.deessrel = get("deessrel");
     P.mk1176 = get("mk1176"); P.auto1176 = get("auto1176"); P.mk670 = get("mk670"); P.auto670 = get("auto670");
     P.ptube = get("ptube"); P.ptrebbw = get("ptrebbw"); P.airlf = get("airlf"); P.airhf = get("airhf");
     P.fxsat = get("fxsat"); P.fxpc = get("fxpc"); P.fxch = get("fxch"); P.fxdist = get("fxdist");
-    P.fxfl = get("fxfl"); P.fxcham = get("fxcham");
+    P.fxfl = get("fxfl"); P.fxcham = get("fxcham"); P.fxnocham = get("fxnocham");
+    P.meq5on = get("meq5on"); P.meqlm = get("meqlm"); P.meqlmf = get("meqlmf");
+    P.mequm = get("mequm"); P.mequmf = get("mequmf"); P.meqhm = get("meqhm"); P.meqhmf = get("meqhmf");
     P.revpre = get("revpre"); P.revwidth = get("revwidth"); P.dlywidth = get("dlywidth"); P.dlyhp = get("dlyhp");
 
     loadFactoryPreset(0);   // start on "Pop Voice"
@@ -155,6 +158,8 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
         hpf[c].reset(); lp1[c].reset(); lp2[c].reset();
         for (int k = 0; k < 5; ++k) eq[k][c].reset();
         pBassB[c].reset(); pBassA[c].reset(); pTrebB[c].reset(); pTrebA[c].reset();
+        meqLm[c].reset(); meqUm[c].reset(); meqHm[c].reset();
+        deessGlo[c].reset(); deessGuHi[c].reset();
         deessBp[c].reset(); aLoPeak[c].reset(); aHiShelf[c].reset();
         aLoSrc[c].reset(); aLoOut[c].reset(); aLoOut2[c].reset();
         aHiSrc[c].reset(); aHiOut[c].reset(); aHiOut2[c].reset();
@@ -189,7 +194,7 @@ void AudiokingsVocalsProcessor::prepareToPlay(double sampleRate, int samplesPerB
     chPh = flPh = 0.f;
 
     filtersValid = false;
-    lastDeF = lastDeQ = lastAirLo = lastAirHi = lastAirLF = lastAirHF = -1.f;
+    lastDeF = lastDeQ = lastDeGlo = lastDeGuHi = lastAirLo = lastAirHi = lastAirLF = lastAirHF = -1.f;
     lastRevTone = -1.f;
     gateDb = gateEnv = 0.f;
     gr1176 = gr1176F = mk1176 = gr670F = gr670S = mk670 = deessEnv = pcGr = 0.f;
@@ -318,8 +323,11 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const int ratioIdx = juce::jlimit(0, 4, (int) std::lround(V(P.ratio)));
     const int tcIdx = juce::jlimit(0, 5, (int) std::lround(V(P.tc)));
     const float attMs = V(P.attack), relMs = V(P.release), deess = V(P.deess);
-    const float deessF = V(P.deessf), deessR = V(P.deessr), deessQ = V(P.deessq);
+    const float deessF = V(P.deessf), deessR = V(P.deessr), deessQ = juce::jlimit(1.5f, 6.0f, V(P.deessq));
+    const float deessGloF = V(P.deessglo), deessGuHiF = V(P.deessguhi);
     const bool deessWide = V(P.deessmode) > 0.5f, deessListen = V(P.deesslisten) > 0.5f;
+    const bool meq5On = V(P.meq5on) > 0.5f;
+    const bool fxNoCham = V(P.fxnocham) > 0.5f;
     const float airLow = V(P.airlow), airHigh = V(P.airhigh), fxv = V(P.fx);
     const int revType = juce::jlimit(0, 3, (int) std::lround(V(P.revtype)));
     const float revTone = V(P.revtone), decay = V(P.decay), revMixP = V(P.revmix);
@@ -407,6 +415,10 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     };
 
     // ---- Pultec activity ----
+    const ak::Meq5Params m5p { V(P.meqlm), V(P.meqlmf), V(P.mequm), V(P.mequmf), V(P.meqhm), V(P.meqhmf) };
+    const bool meq5Active = meq5On && (m5p.lmBoost > 0.05f || m5p.umAtt > 0.05f || m5p.hmBoost > 0.05f);
+    const std::array<float, 6> nowM5 { m5p.lmBoost, m5p.lmF, m5p.umAtt, m5p.umF, m5p.hmBoost, m5p.hmF };
+    if (nowM5 != lastMeq5) { lastMeq5 = nowM5; const auto m = ak::makeMeq5(sr, m5p); for (int c=0;c<2;++c){meqLm[c].c=m.lm;meqUm[c].c=m.um;meqHm[c].c=m.hm;} }
     const bool pultecOn = pp.bass > 0.05f || pp.bassAtt > 0.05f || pp.treb > 0.05f || pp.trebAtt > 0.05f || ptube > 0.05f;
 
     // ---- Air exciter (acts directly on the voice, independent of FX) ----
@@ -435,6 +447,18 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         const auto bp = ak::makeBiquad(ak::BQ::BandPass, sr, (double) deessF, (double) deessQ, 0.0);
         deessBp[0].c = bp; deessBp[1].c = bp;
     }
+    if (deessGloF != lastDeGlo)
+    {
+        lastDeGlo = deessGloF;
+        const auto hp = ak::makeBiquad(ak::BQ::HighPass, sr, (double) deessGloF, 0.707, 0.0);
+        deessGlo[0].c = hp; deessGlo[1].c = hp;
+    }
+    if (deessGuHiF != lastDeGuHi)
+    {
+        lastDeGuHi = deessGuHiF;
+        const auto lp = ak::makeBiquad(ak::BQ::LowPass, sr, (double) deessGuHiF, 0.707, 0.0);
+        deessGuHi[0].c = lp; deessGuHi[1].c = lp;
+    }
     float deMaxRed = 0.f, deEnvMax = 0.f;
     const float envAtk = (float) std::exp(-1.0 / (sr * (double) V(P.deessatk) * 0.001));
     const float envRel = (float) std::exp(-1.0 / (sr * (double) V(P.deessrel) * 0.001));
@@ -443,7 +467,8 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     const float t = smoothStep(fxv / 50.f);
     const float u = smoothStep((fxv - 50.f) / 50.f);
     const float satMix = 0.22f * t * V(P.fxsat) * 0.01f, pcMix = 0.30f * t * V(P.fxpc) * 0.01f, chMix = 0.32f * t * V(P.fxch) * 0.01f;
-    const float distMix = 0.35f * u * V(P.fxdist) * 0.01f, flMix = 0.45f * u * V(P.fxfl) * 0.01f, chamMix = 0.30f * u * V(P.fxcham) * 0.01f;
+    const float distMix = 0.35f * u * V(P.fxdist) * 0.01f, flMix = 0.45f * u * V(P.fxfl) * 0.01f;
+    const float chamMix = fxNoCham ? 0.f : 0.30f * u * V(P.fxcham) * 0.01f;
     const bool satOn = satMix > 0.003f, pcOn = pcMix > 0.003f, chOn = chMix > 0.003f;
     const bool distOn = distMix > 0.003f, flOn = flMix > 0.003f;
     const float chInc = 0.55f / (float) sr, flInc = 0.22f / (float) sr;
@@ -533,6 +558,13 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     x[c] += ptube * 0.0035f * (std::tanh(1.8f * x[c]) / 1.8f - x[c]);
             }
         }
+        if (meq5Active)
+            for (int c = 0; c < nch; ++c)
+            {
+                x[c] = meqLm[c].process(x[c]);
+                x[c] = meqUm[c].process(x[c]);
+                x[c] = meqHm[c].process(x[c]);
+            }
 
         // --- 4) Fairchild 670: variable-mu, side-chain high-pass, transformer and core colour, make-up ---
         {
@@ -613,11 +645,18 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         // --- de-esser: after the Air exciter, to catch the sibilance it creates ---
         if (deOn)
         {
+            // Guard: only the signal between Guard Lo and Guard Hi goes into the de-esser path
+            float guard[2] = { 0.f, 0.f };
+            for (int c = 0; c < nch; ++c)
+            {
+                guard[c] = deessGlo[c].process(x[c]);
+                guard[c] = deessGuHi[c].process(guard[c]);
+            }
             float band[2] = { 0.f, 0.f };
             float det = 0.f;
             for (int c = 0; c < nch; ++c)
             {
-                band[c] = deessBp[c].process(x[c]);
+                band[c] = deessBp[c].process(guard[c]);     // narrow sibilance band from the guarded signal
                 det = std::max(det, std::abs(band[c]));
             }
             deessEnv = det > deessEnv ? envAtk * deessEnv + (1.f - envAtk) * det
@@ -745,7 +784,7 @@ void AudiokingsVocalsProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
         hostBpm.store((float) bpm);
-        static const double kBeats[4] = { 1.0, 0.75, 0.5, 0.25 };
+        static const double kBeats[5] = { 2.0, 1.0, 0.75, 0.5, 0.25 };
         const int dlySize = (int) dlyBuf[0].size();
         const int dlySamples = juce::jlimit(64, dlySize - 2, (int) (sr * 60.0 / bpm * kBeats[dlyDiv]));
         const float fb = 0.10f + 0.55f * delayAmt * 0.01f;        // Delay = amount of echo (repeats)

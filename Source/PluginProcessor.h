@@ -83,9 +83,10 @@ private:
         std::atomic<float> *airlow, *airhigh, *fx;
         std::atomic<float> *revtype, *revtone, *decay, *revmix;
         std::atomic<float> *dlydiv, *delay, *delaytone, *delaymix;
-        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessq, *deessmode, *deesslisten;
+        std::atomic<float> *output, *hpf, *attack, *release, *deess, *deessf, *deessr, *deessq, *deessmode, *deesslisten, *deessglo, *deessguhi;
         std::atomic<float> *deessatk, *deessrel, *mk1176, *auto1176, *mk670, *auto670, *ptube, *ptrebbw, *airlf, *airhf;
-        std::atomic<float> *fxsat, *fxpc, *fxch, *fxdist, *fxfl, *fxcham, *revpre, *revwidth, *dlywidth, *dlyhp;
+        std::atomic<float> *fxsat, *fxpc, *fxch, *fxdist, *fxfl, *fxcham, *fxnocham, *revpre, *revwidth, *dlywidth, *dlyhp;
+        std::atomic<float> *meq5on, *meqlm, *meqlmf, *mequm, *mequmf, *meqhm, *meqhmf;
     } P {};
 
     void updateFilters(const ak::EqParams& e, const ak::PultecParams& p);
@@ -95,6 +96,8 @@ private:
     // filters
     ak::Biquad hpf[2], eq[5][2], lp1[2], lp2[2];
     ak::Biquad pBassB[2], pBassA[2], pTrebB[2], pTrebA[2];
+    ak::Biquad meqLm[2], meqUm[2], meqHm[2];        // MEQ-5
+    ak::Biquad deessGlo[2], deessGuHi[2];            // de-esser guard filters
     ak::Biquad deessBp[2];                                      // de-esser detector / split band
     // Air exciter: the harmonics are generated from a band that does NOT overlap the output band,
     // so the added signal can never cancel the original voice
@@ -128,8 +131,9 @@ private:
     double sr = 44100.0;
     bool filtersValid = false;
     std::array<float, 18> lastEq {};
-    float lastDeF = -1.f, lastDeQ = -1.f, lastAirLo = -1.f, lastAirHi = -1.f, lastAirLF = -1.f, lastAirHF = -1.f;
+    float lastDeF = -1.f, lastDeQ = -1.f, lastDeGlo = -1.f, lastDeGuHi = -1.f, lastAirLo = -1.f, lastAirHi = -1.f, lastAirLF = -1.f, lastAirHF = -1.f;
     std::array<float, 7> lastPultec {};
+    std::array<float, 6> lastMeq5 {};
     float lastRevTone = -1.f;
 
     std::array<float, scopeSize> scopeL {}, scopeR {}, scopeInL {}, scopeInR {};

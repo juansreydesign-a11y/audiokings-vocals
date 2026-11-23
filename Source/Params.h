@@ -65,7 +65,7 @@ inline const ParamDef kParams[] = {
     { "decay",     "Decay",              0,  100, 0.1f,   0,   40, " %",  0, KFloat,  "" },
     { "revmix",    "Reverb Mix",         0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
     // ---- delay (parallel) ----
-    { "delaydiv",  "Delay Time",         0,    3, 1,      0,    1, "",    0, KChoice, "1/4|1/8 dotted|1/8|1/16" },
+    { "delaydiv",  "Delay Time",         0,    4, 1,      0,    1, "",    0, KChoice, "1/2|1/4|1/8 dotted|1/8|1/16" },
     { "delay",     "Delay",              0,  100, 0.1f,   0,   30, " %",  0, KFloat,  "" },
     { "delaytone", "Delay Tone",         0,  100, 0.1f,   0,   55, " %",  0, KFloat,  "" },
     { "delaymix",  "Delay Mix",          0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
@@ -79,7 +79,9 @@ inline const ParamDef kParams[] = {
     { "deess",     "De-Esser Amount",    0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
     { "deessf",    "De-Esser Freq",   3000,10000, 10,  6500, 6500, " Hz", 0, KFloat,  "" },
     { "deessr",    "De-Esser Range",     0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
-    { "deessq",    "De-Esser Bandwidth", 0.5f,   4, 0.01f, 1.5f, 1.8f, "", 2, KFloat, "" },
+    { "deessq",    "De-Esser Bandwidth", 1.5f, 6.0f, 0.01f, 3.0f, 2.5f, "", 2, KFloat, "" },
+    { "deessglo",  "De-Esser Guard Lo",  600, 4000, 1, 2000, 2000, " Hz", 0, KFloat, "" },
+    { "deessguhi", "De-Esser Guard Hi", 8000,20000, 1,16000,16000, " Hz", 0, KFloat, "" },
     { "deessmode", "De-Esser Mode",      0,    1, 1,      0,    0, "",    0, KChoice, "Split|Wide" },
     { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" },
     { "deessatk",  "De-Esser Attack",  0.1f,  20, 0.01f,   1,  0.5f, " ms", 2, KFloat, "" },
@@ -92,6 +94,14 @@ inline const ParamDef kParams[] = {
     // ---- Pultec extras ----
     { "ptube",     "Pultec Tube",        0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
     { "ptrebbw",   "Pultec Treble Bandwidth", 0, 100, 0.1f, 0,  55, " %",  0, KFloat,  "" },
+    // ---- Pultec MEQ-5 ----
+    { "meq5on",    "MEQ-5 On",             0,   1, 1,     0,   0, "",    0, KBool,  "" },
+    { "meqlm",     "MEQ-5 Low Mid",        0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "meqlmf",    "MEQ-5 LM Freq",      200,1000, 1,  450, 450, " Hz",  0, KFloat, "" },
+    { "mequm",     "MEQ-5 Mid Dip",        0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "mequmf",    "MEQ-5 UM Freq",      200,1500, 1,  600, 600, " Hz",  0, KFloat, "" },
+    { "meqhm",     "MEQ-5 High Mid",       0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "meqhmf",    "MEQ-5 HM Freq",     1500,5000, 1, 3000,3000, " Hz",  0, KFloat, "" },
     // ---- Air exciter frequencies ----
     { "airlf",     "Air Low Freq",    2000, 5000, 10,   3200, 3200, " Hz", 0, KFloat,  "" },
     { "airhf",     "Air High Freq",   6000,14000, 10,   9500, 9500, " Hz", 0, KFloat,  "" },
@@ -106,7 +116,8 @@ inline const ParamDef kParams[] = {
     { "revpre",    "Reverb Pre-Delay",   0,  100, 0.1f,   0,    0, " ms", 0, KFloat,  "" },
     { "revwidth",  "Reverb Width",       0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
     { "dlywidth",  "Delay Width",        0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
-    { "dlyhp",     "Delay High-Pass",   20,  600, 1,    120,   20, " Hz", 0, KFloat,  "" }
+    { "dlyhp",     "Delay High-Pass",   20,  600, 1,    120,   20, " Hz", 0, KFloat,  "" },
+    { "fxnocham",  "FX No Chamber Rev",  0,    1, 1,     0,   0, "",    0, KBool,  "" }
 };
 
 constexpr int kNumParams = (int) (sizeof(kParams) / sizeof(kParams[0]));
