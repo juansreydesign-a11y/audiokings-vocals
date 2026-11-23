@@ -35,6 +35,10 @@ juce_add_plugin(AudiokingsVocals
     PLUGIN_CODE Akvc
     FORMATS ${AK_FORMATS}
     AU_MAIN_TYPE kAudioUnitType_Effect
+    BUNDLE_ID "com.audiokings.vocals"
+    BUNDLE_VERSION "3.6.0"
+    HARDENED_RUNTIME_ENABLED TRUE
+    AU_SANDBOX_SAFE TRUE
     PRODUCT_NAME "Audiokings Vocals"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
