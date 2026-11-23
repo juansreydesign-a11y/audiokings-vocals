@@ -10,7 +10,7 @@ struct BiquadCoeffs
     double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
 };
 
-enum class BQ { LowShelf, HighShelf, Peak, HighPass };
+enum class BQ { LowShelf, HighShelf, Peak, HighPass, LowPass, BandPass };
 
 inline BiquadCoeffs makeBiquad(BQ type, double sr, double f0, double q, double gainDb)
 {
@@ -47,6 +47,14 @@ inline BiquadCoeffs makeBiquad(BQ type, double sr, double f0, double q, double g
             break;
         case BQ::HighPass:
             b0 = (1 + cw) / 2;  b1 = -(1 + cw);  b2 = (1 + cw) / 2;
+            a0 = 1 + alpha;     a1 = -2 * cw;    a2 = 1 - alpha;
+            break;
+        case BQ::BandPass:      // constant 0 dB peak gain
+            b0 = alpha;         b1 = 0;          b2 = -alpha;
+            a0 = 1 + alpha;     a1 = -2 * cw;    a2 = 1 - alpha;
+            break;
+        case BQ::LowPass:
+            b0 = (1 - cw) / 2;  b1 = 1 - cw;     b2 = (1 - cw) / 2;
             a0 = 1 + alpha;     a1 = -2 * cw;    a2 = 1 - alpha;
             break;
     }
@@ -86,25 +94,84 @@ inline double magnitudeAt(const BiquadCoeffs& c, double f, double sr)
     return std::sqrt((nr * nr + ni * ni) / (dr * dr + di * di + 1.0e-30));
 }
 
-// The complete EQ section: high-pass + 4 movable bands
+// ---------------------------------------------------------------------------
+// Graphic ("live response") EQ: 5 movable nodes + high-pass + optional low-pass (24 dB/oct)
+// node 0 = low shelf, 1 = low-mid bell, 2 = high-mid bell, 3 = presence bell, 4 = air shelf
 struct EqParams
 {
-    float hpf, bassG, bassF, mudG, mudF, trebG, trebF, airG, airF;
+    float hpf;
+    float g[5];
+    float f[5];
+    float q[5];
+    bool  lpOn;
+    float lpf;
 };
 
 struct EqSet
 {
-    BiquadCoeffs hp, bass, mud, treb, air;
+    BiquadCoeffs hp, n[5], lp1, lp2;
+    bool lpOn = false;
 };
 
 inline EqSet makeEq(double sr, const EqParams& p)
 {
     EqSet e;
-    e.hp   = makeBiquad(BQ::HighPass,  sr, p.hpf,   0.707, 0.0);
-    e.bass = makeBiquad(BQ::LowShelf,  sr, p.bassF, 0.7,   p.bassG);
-    e.mud  = makeBiquad(BQ::Peak,      sr, p.mudF,  0.9,   p.mudG);
-    e.treb = makeBiquad(BQ::Peak,      sr, p.trebF, 0.8,   p.trebG);
-    e.air  = makeBiquad(BQ::HighShelf, sr, p.airF,  0.7,   p.airG);
+    e.hp   = makeBiquad(BQ::HighPass,  sr, p.hpf,  0.707, 0.0);
+    e.n[0] = makeBiquad(BQ::LowShelf,  sr, p.f[0], p.q[0], p.g[0]);
+    e.n[1] = makeBiquad(BQ::Peak,      sr, p.f[1], p.q[1], p.g[1]);
+    e.n[2] = makeBiquad(BQ::Peak,      sr, p.f[2], p.q[2], p.g[2]);
+    e.n[3] = makeBiquad(BQ::Peak,      sr, p.f[3], p.q[3], p.g[3]);
+    e.n[4] = makeBiquad(BQ::HighShelf, sr, p.f[4], p.q[4], p.g[4]);
+    e.lpOn = p.lpOn;
+    e.lp1  = makeBiquad(BQ::LowPass,   sr, p.lpf,  0.5412, 0.0);   // 4th-order Butterworth
+    e.lp2  = makeBiquad(BQ::LowPass,   sr, p.lpf,  1.3066, 0.0);
     return e;
+}
+
+// ---------------------------------------------------------------------------
+// Pultec MEQ-5 Mid-Range Equalizer
+// LM Freq  200 - 1000 Hz  peak boost  (Low Midrange)
+// UM Freq  200 - 1500 Hz  dip         (Upper Midrange Attenuation)
+// HM Freq  1500 - 5000 Hz peak boost  (High Midrange)
+struct Meq5Params
+{
+    float lmBoost, lmF, umAtt, umF, hmBoost, hmF;  // boost/att 0..100, freqs in Hz
+};
+
+struct Meq5Set
+{
+    BiquadCoeffs lm, um, hm;
+};
+
+inline Meq5Set makeMeq5(double sr, const Meq5Params& p)
+{
+    Meq5Set s;
+    s.lm = makeBiquad(BQ::Peak, sr, p.lmF, 1.5, (double) p.lmBoost * 0.14);
+    s.um = makeBiquad(BQ::Peak, sr, p.umF, 1.0, -(double) p.umAtt  * 0.12);
+    s.hm = makeBiquad(BQ::Peak, sr, p.hmF, 1.2, (double) p.hmBoost * 0.14);
+    return s;
+}
+
+// ---------------------------------------------------------------------------
+// Pultec-style passive EQ (after the 1176): boost + attenuation at the same frequency
+struct PultecParams
+{
+    float bass, bassAtt, bassF, treb, trebAtt, trebF;   // amounts 0..100, freqs in Hz
+    float trebQ;                                       // treble boost bandwidth
+};
+
+struct PultecSet
+{
+    BiquadCoeffs bBoost, bAtt, tBoost, tAtt;
+};
+
+inline PultecSet makePultec(double sr, const PultecParams& p)
+{
+    PultecSet s;
+    s.bBoost = makeBiquad(BQ::LowShelf,  sr, p.bassF,        0.9,  p.bass    * 0.14);
+    s.bAtt   = makeBiquad(BQ::LowShelf,  sr, p.bassF * 2.2,  0.5, -p.bassAtt * 0.14);
+    s.tBoost = makeBiquad(BQ::Peak,      sr, p.trebF,        p.trebQ, p.treb    * 0.14);
+    s.tAtt   = makeBiquad(BQ::HighShelf, sr, p.trebF * 1.35, 0.6, -p.trebAtt * 0.14);
+    return s;
 }
 } // namespace ak

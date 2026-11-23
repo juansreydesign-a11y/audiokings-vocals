@@ -1,4 +1,4 @@
-name: Build Audiokings Vocals (Windows VST3)
+name: Build Audiokings Vocals (Windows + macOS)
 
 on:
   push:
@@ -11,6 +11,7 @@ permissions:
   contents: write
 
 jobs:
+  # ------------------------------------------------------------------ Windows
   build-windows:
     runs-on: windows-latest
     steps:
@@ -22,22 +23,140 @@ jobs:
       - name: Build (Release)
         run: cmake --build build --config Release --parallel
 
-      - name: Package
+      - name: Package zip
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item -Recurse "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" "dist/"
-          Copy-Item "installer/Install-AudiokingsVocals.bat" "dist/"
-          Compress-Archive -Path "dist/*" -DestinationPath "AudiokingsVocals-Windows-VST3.zip" -Force
+          New-Item -ItemType Directory -Force -Path pack | Out-Null
+          Copy-Item -Recurse "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" "pack/"
+          Copy-Item "installer/Install-AudiokingsVocals.bat" "pack/"
+          Compress-Archive -Path "pack/*" -DestinationPath "AudiokingsVocals-Windows-VST3.zip" -Force
 
-      - name: Upload artifact
+      - name: Build installer (.exe)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=3.5.0" "installer\AudiokingsVocals.iss"
+          Get-ChildItem dist
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AudiokingsVocals-Windows-VST3
-          path: AudiokingsVocals-Windows-VST3.zip
+          name: AudiokingsVocals-Windows
+          path: |
+            AudiokingsVocals-Windows-VST3.zip
+            dist/AudiokingsVocals-Setup-*.exe
 
-      - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  # -------------------------------------------------------------------- macOS
+  build-macos:
+    runs-on: macos-latest
+    env:
+      # Optional signing + notarization. Without these secrets the plug-ins are ad-hoc signed
+      # (they run, but Gatekeeper asks for confirmation the first time).
+      HAS_SIGNING: ${{ secrets.APPLE_CERT_APPLICATION_BASE64 != '' }}
+      APPLE_CERT_APPLICATION_BASE64: ${{ secrets.APPLE_CERT_APPLICATION_BASE64 }}
+      APPLE_CERT_INSTALLER_BASE64: ${{ secrets.APPLE_CERT_INSTALLER_BASE64 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_DEVELOPER_ID_APP: ${{ secrets.APPLE_DEVELOPER_ID_APP }}
+      APPLE_DEVELOPER_ID_INSTALLER: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure (universal build - Apple Silicon and Intel)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
+
+      - name: Build (Release)
+        run: cmake --build build --config Release --parallel
+
+      - name: Locate plug-ins
+        run: |
+          ls -R build/AudiokingsVocals_artefacts | head -40
+          lipo -archs "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3/Contents/MacOS/Audiokings Vocals" || true
+
+      - name: Import signing certificates (optional)
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          KC_PW="$(uuidgen)"
+          echo "KC_PW=$KC_PW" >> "$GITHUB_ENV"
+          security create-keychain -p "$KC_PW" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KC_PW" build.keychain
+          security set-keychain-settings -lut 3600 build.keychain
+          echo "$APPLE_CERT_APPLICATION_BASE64" | base64 --decode > app.p12
+          security import app.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          if [ -n "$APPLE_CERT_INSTALLER_BASE64" ]; then
+            echo "$APPLE_CERT_INSTALLER_BASE64" | base64 --decode > inst.p12
+            security import inst.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/productsign
+          fi
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PW" build.keychain
+
+      - name: Sign plug-ins
+        run: |
+          VST3="build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3"
+          AU="build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component"
+          if [ "$HAS_SIGNING" = "true" ]; then
+            codesign --force --deep --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID_APP" "$VST3"
+            codesign --force --deep --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID_APP" "$AU"
+          else
+            codesign --force --deep --sign - "$VST3"
+            codesign --force --deep --sign - "$AU"
+          fi
+          codesign --verify --deep --strict --verbose=2 "$VST3"
+          codesign --verify --deep --strict --verbose=2 "$AU"
+
+      - name: Build installer (.pkg)
+        run: |
+          mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3 pkgroot/Library/Audio/Plug-Ins/Components
+          cp -R "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" pkgroot/Library/Audio/Plug-Ins/VST3/
+          cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" pkgroot/Library/Audio/Plug-Ins/Components/
+          chmod +x installer/mac/scripts/preinstall installer/mac/scripts/postinstall
+          pkgbuild --root pkgroot --identifier com.audiokings.vocals --version 3.5.0 \
+                   --install-location / --scripts installer/mac/scripts AudiokingsVocals-unsigned.pkg
+          if [ "$HAS_SIGNING" = "true" ] && [ -n "$APPLE_DEVELOPER_ID_INSTALLER" ]; then
+            productsign --sign "$APPLE_DEVELOPER_ID_INSTALLER" AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.5.0.pkg
+          else
+            mv AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.5.0.pkg
+          fi
+
+      - name: Notarize (optional)
+        if: env.HAS_SIGNING == 'true' && env.APPLE_ID != ''
+        run: |
+          xcrun notarytool submit AudiokingsVocals-macOS-3.5.0.pkg --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple AudiokingsVocals-macOS-3.5.0.pkg
+
+      - name: Package zip (plug-ins + uninstaller)
+        run: |
+          mkdir -p macpack
+          cp -R "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" macpack/
+          cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" macpack/
+          chmod +x installer/mac/Uninstall-AudiokingsVocals.command
+          cp installer/mac/Uninstall-AudiokingsVocals.command macpack/
+          ditto -c -k --keepParent macpack AudiokingsVocals-macOS-Plugins.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: AudiokingsVocals-Windows-VST3.zip
+          name: AudiokingsVocals-macOS
+          path: |
+            AudiokingsVocals-macOS-3.5.0.pkg
+            AudiokingsVocals-macOS-Plugins.zip
+
+  # ------------------------------------------------------------------ Release
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ build-windows, build-macos ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.pkg

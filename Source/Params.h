@@ -1,0 +1,124 @@
+#pragma once
+
+namespace ak
+{
+enum Kind { KFloat = 0, KChoice, KBool };
+
+struct ParamDef
+{
+    const char* id;
+    const char* name;
+    float lo, hi, step, centre, def;   // centre > 0 -> skew so that value sits in the middle of the knob
+    const char* unit;
+    int decimals;
+    Kind kind;
+    const char* choices;               // "a|b|c" for KChoice
+};
+
+// One table for everything: layout, presets (by id) and UI attachments.
+inline const ParamDef kParams[] = {
+    // ---- input / noise ----
+    { "sens",      "Level / Sens",       0,  100, 0.1f,   0,   50, " %",  0, KFloat,  "" },
+    { "noise",     "Noise Reduction",    0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    // ---- compression: master + 1176 + Fairchild 670 ----
+    { "compress",  "Compress",           0,  100, 0.1f,   0,   40, " %",  0, KFloat,  "" },
+    { "w1176",     "1176 Amount",        0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "w670",      "670 Amount",         0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
+    { "ratio1176", "1176 Ratio",         0,    4, 1,      0,    0, "",    0, KChoice, "4:1|8:1|12:1|20:1|ALL" },
+    { "tc670",     "670 Time Constant",  0,    5, 1,      0,    2, "",    0, KChoice, "1|2|3|4|5|6" },
+    // ---- Pultec EQ ----
+    { "pbass",     "Pultec Bass",        0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "pbassatt",  "Pultec Bass Atten",  0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "pbassf",    "Pultec Bass Freq",  25,  220, 1,     80,   80, " Hz", 0, KFloat,  "" },
+    { "ptreb",     "Pultec Treble",      0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "ptrebatt",  "Pultec Treble Atten",0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "ptrebf",    "Pultec Treble Freq",4000,20000, 10, 10000, 10000, " Hz", 0, KFloat, "" },
+    // ---- graphic (live response) EQ: gains ----
+    { "eqlow",     "EQ Low",           -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "eqlowmid",  "EQ Low-Mid",       -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "eqhimid",   "EQ High-Mid",      -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "eqpres",    "EQ Presence",      -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "eqair",     "EQ Air",           -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    // ---- graphic EQ: frequencies ----
+    { "eqlowf",    "EQ Low Freq",       40,  400, 1,    100,  100, " Hz", 0, KFloat,  "" },
+    { "eqlowmidf", "EQ Low-Mid Freq",  150, 1000, 1,    350,  350, " Hz", 0, KFloat,  "" },
+    { "eqhimidf",  "EQ High-Mid Freq", 800, 4000, 1,   2000, 2000, " Hz", 0, KFloat,  "" },
+    { "eqpresf",   "EQ Presence Freq",3000,10000, 1,   5000, 5000, " Hz", 0, KFloat,  "" },
+    { "eqairf",    "EQ Air Freq",     6000,18000, 1,  11000,11000, " Hz", 0, KFloat,  "" },
+    // ---- graphic EQ: Q / bandwidth ----
+    { "eqlowq",    "EQ Low Q",        0.3f,    2, 0.01f, 0.7f, 0.7f, "", 2, KFloat, "" },
+    { "eqlowmidq", "EQ Low-Mid Q",    0.3f,    8, 0.01f, 1.5f, 0.9f, "", 2, KFloat, "" },
+    { "eqhimidq",  "EQ High-Mid Q",   0.3f,    8, 0.01f, 1.5f, 0.9f, "", 2, KFloat, "" },
+    { "eqpresq",   "EQ Presence Q",   0.3f,    8, 0.01f, 1.5f, 0.8f, "", 2, KFloat, "" },
+    { "eqairq",    "EQ Air Q",        0.3f,    2, 0.01f, 0.7f, 0.7f, "", 2, KFloat, "" },
+    // ---- low-pass filter ----
+    { "lpon",      "Low-Pass On",        0,    1, 1,      0,    0, "",    0, KBool,   "" },
+    { "lpf",       "Low-Pass Freq",   3000,20000, 10, 10000,16000, " Hz", 0, KFloat,  "" },
+    // ---- Air exciter (direct on the voice) ----
+    { "airlow",    "Air Low",            0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "airhigh",   "Air High",           0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    // ---- FX macro ----
+    { "fx",        "FX",                 0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    // ---- reverb (parallel) ----
+    { "revtype",   "Reverb Type",        0,    3, 1,      0,    1, "",    0, KChoice, "Room|Plate|Hall|Studio" },
+    { "revtone",   "Reverb Tone",        0,  100, 0.1f,   0,   50, " %",  0, KFloat,  "" },
+    { "decay",     "Decay",              0,  100, 0.1f,   0,   40, " %",  0, KFloat,  "" },
+    { "revmix",    "Reverb Mix",         0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    // ---- delay (parallel) ----
+    { "delaydiv",  "Delay Time",         0,    4, 1,      0,    1, "",    0, KChoice, "1/2|1/4|1/8 dotted|1/8|1/16" },
+    { "delay",     "Delay",              0,  100, 0.1f,   0,   30, " %",  0, KFloat,  "" },
+    { "delaytone", "Delay Tone",         0,  100, 0.1f,   0,   55, " %",  0, KFloat,  "" },
+    { "delaymix",  "Delay Mix",          0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    // ---- output ----
+    { "output",    "Output",           -12,   12, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    // ---- preset-driven fine settings ----
+    { "hpf",       "High-Pass",         20,  300, 1,     90,   90, " Hz", 0, KFloat,  "" },
+    { "attack",    "1176 Attack",     0.02f, 0.8f, 0.01f, 0.25f, 0.3f, " ms", 2, KFloat, "" },
+    { "release",   "1176 Release",      50, 1100, 1,    300,  250, " ms", 0, KFloat,  "" },
+    // ---- de-esser (after the Pultec) ----
+    { "deess",     "De-Esser Amount",    0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "deessf",    "De-Esser Freq",   3000,10000, 10,  6500, 6500, " Hz", 0, KFloat,  "" },
+    { "deessr",    "De-Esser Range",     0,  100, 0.1f,   0,   60, " %",  0, KFloat,  "" },
+    { "deessq",    "De-Esser Bandwidth", 1.5f, 6.0f, 0.01f, 3.0f, 2.5f, "", 2, KFloat, "" },
+    { "deessglo",  "De-Esser Guard Lo",  600, 4000, 1, 2000, 2000, " Hz", 0, KFloat, "" },
+    { "deessguhi", "De-Esser Guard Hi", 8000,20000, 1,16000,16000, " Hz", 0, KFloat, "" },
+    { "deessmode", "De-Esser Mode",      0,    1, 1,      0,    0, "",    0, KChoice, "Split|Wide" },
+    { "deesslisten","De-Esser Listen",   0,    1, 1,      0,    0, "",    0, KBool,   "" },
+    { "deessatk",  "De-Esser Attack",  0.1f,  20, 0.01f,   1,  0.5f, " ms", 2, KFloat, "" },
+    { "deessrel",  "De-Esser Release",   5,  200, 0.1f,   40,   40, " ms", 0, KFloat,  "" },
+    // ---- compressor make-up (after each compressor) ----
+    { "mk1176",    "1176 Make-up",     -12,   18, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "auto1176",  "1176 Auto Gain",     0,    1, 1,      0,    1, "",    0, KBool,   "" },
+    { "mk670",     "670 Make-up",      -12,   18, 0.1f,   0,    0, " dB", 1, KFloat,  "" },
+    { "auto670",   "670 Auto Gain",      0,    1, 1,      0,    1, "",    0, KBool,   "" },
+    // ---- Pultec extras ----
+    { "ptube",     "Pultec Tube",        0,  100, 0.1f,   0,    0, " %",  0, KFloat,  "" },
+    { "ptrebbw",   "Pultec Treble Bandwidth", 0, 100, 0.1f, 0,  55, " %",  0, KFloat,  "" },
+    // ---- Pultec MEQ-5 ----
+    { "meq5on",    "MEQ-5 On",             0,   1, 1,     0,   0, "",    0, KBool,  "" },
+    { "meqlm",     "MEQ-5 Low Mid",        0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "meqlmf",    "MEQ-5 LM Freq",      200,1000, 1,  450, 450, " Hz",  0, KFloat, "" },
+    { "mequm",     "MEQ-5 Mid Dip",        0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "mequmf",    "MEQ-5 UM Freq",      200,1500, 1,  600, 600, " Hz",  0, KFloat, "" },
+    { "meqhm",     "MEQ-5 High Mid",       0, 100, 0.1f,  0,   0, " %",  0, KFloat, "" },
+    { "meqhmf",    "MEQ-5 HM Freq",     1500,5000, 1, 3000,3000, " Hz",  0, KFloat, "" },
+    // ---- Air exciter frequencies ----
+    { "airlf",     "Air Low Freq",    2000, 5000, 10,   3200, 3200, " Hz", 0, KFloat,  "" },
+    { "airhf",     "Air High Freq",   6000,14000, 10,   9500, 9500, " Hz", 0, KFloat,  "" },
+    // ---- FX per-effect trims ----
+    { "fxsat",     "FX Saturation",      0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxpc",      "FX Parallel Comp",   0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxch",      "FX Chorus",          0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxdist",    "FX Distortion",      0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxfl",      "FX Flanger",         0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "fxcham",    "FX Chamber",         0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    // ---- reverb / delay extras ----
+    { "revpre",    "Reverb Pre-Delay",   0,  100, 0.1f,   0,    0, " ms", 0, KFloat,  "" },
+    { "revwidth",  "Reverb Width",       0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "dlywidth",  "Delay Width",        0,  100, 0.1f,   0,  100, " %",  0, KFloat,  "" },
+    { "dlyhp",     "Delay High-Pass",   20,  600, 1,    120,   20, " Hz", 0, KFloat,  "" },
+    { "fxnocham",  "FX No Chamber Rev",  0,    1, 1,     0,   0, "",    0, KBool,  "" }
+};
+
+constexpr int kNumParams = (int) (sizeof(kParams) / sizeof(kParams[0]));
+} // namespace ak
