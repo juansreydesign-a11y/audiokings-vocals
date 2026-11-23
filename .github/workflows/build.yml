@@ -35,8 +35,9 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=3.5.0" "installer\AudiokingsVocals.iss"
-          Get-ChildItem dist
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=3.6.0" "installer\AudiokingsVocals.iss"
+          if (Test-Path dist) { Get-ChildItem dist } else { Write-Warning "dist folder not found after ISCC" }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -72,8 +73,12 @@ jobs:
 
       - name: Locate plug-ins
         run: |
-          ls -R build/AudiokingsVocals_artefacts | head -40
-          lipo -archs "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3/Contents/MacOS/Audiokings Vocals" || true
+          echo "=== artefacts tree ==="
+          find build/AudiokingsVocals_artefacts -maxdepth 5 | sort
+          echo "=== VST3 binary ==="
+          lipo -archs "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3/Contents/MacOS/Audiokings Vocals" 2>/dev/null || echo "VST3 binary not found"
+          echo "=== AU binary ==="
+          lipo -archs "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component/Contents/MacOS/Audiokings Vocals" 2>/dev/null || echo "AU binary not found"
 
       - name: Import signing certificates (optional)
         if: env.HAS_SIGNING == 'true'
@@ -98,40 +103,47 @@ jobs:
           AU="build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component"
           if [ "$HAS_SIGNING" = "true" ]; then
             codesign --force --deep --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID_APP" "$VST3"
-            codesign --force --deep --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID_APP" "$AU"
+            [ -d "$AU" ] && codesign --force --deep --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID_APP" "$AU"
           else
             codesign --force --deep --sign - "$VST3"
-            codesign --force --deep --sign - "$AU"
+            [ -d "$AU" ] && codesign --force --deep --sign - "$AU"
           fi
           codesign --verify --deep --strict --verbose=2 "$VST3"
-          codesign --verify --deep --strict --verbose=2 "$AU"
+          [ -d "$AU" ] && codesign --verify --deep --strict --verbose=2 "$AU"
+          echo "HAS_AU=$([ -d "$AU" ] && echo true || echo false)" >> "$GITHUB_ENV"
 
       - name: Build installer (.pkg)
         run: |
           mkdir -p pkgroot/Library/Audio/Plug-Ins/VST3 pkgroot/Library/Audio/Plug-Ins/Components
           cp -R "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" pkgroot/Library/Audio/Plug-Ins/VST3/
-          cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" pkgroot/Library/Audio/Plug-Ins/Components/
+          if [ -d "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" ]; then
+            cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" pkgroot/Library/Audio/Plug-Ins/Components/
+          else
+            echo "Warning: AU component not found - VST3 only pkg"
+          fi
           chmod +x installer/mac/scripts/preinstall installer/mac/scripts/postinstall
-          pkgbuild --root pkgroot --identifier com.audiokings.vocals --version 3.5.0 \
+          pkgbuild --root pkgroot --identifier com.audiokings.vocals --version 3.6.0 \
                    --install-location / --scripts installer/mac/scripts AudiokingsVocals-unsigned.pkg
           if [ "$HAS_SIGNING" = "true" ] && [ -n "$APPLE_DEVELOPER_ID_INSTALLER" ]; then
-            productsign --sign "$APPLE_DEVELOPER_ID_INSTALLER" AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.5.0.pkg
+            productsign --sign "$APPLE_DEVELOPER_ID_INSTALLER" AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.6.0.pkg
           else
-            mv AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.5.0.pkg
+            mv AudiokingsVocals-unsigned.pkg AudiokingsVocals-macOS-3.6.0.pkg
           fi
 
       - name: Notarize (optional)
         if: env.HAS_SIGNING == 'true' && env.APPLE_ID != ''
         run: |
-          xcrun notarytool submit AudiokingsVocals-macOS-3.5.0.pkg --apple-id "$APPLE_ID" \
+          xcrun notarytool submit AudiokingsVocals-macOS-*.pkg --apple-id "$APPLE_ID" \
                 --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple AudiokingsVocals-macOS-3.5.0.pkg
+          xcrun stapler staple AudiokingsVocals-macOS-*.pkg
 
       - name: Package zip (plug-ins + uninstaller)
         run: |
           mkdir -p macpack
           cp -R "build/AudiokingsVocals_artefacts/Release/VST3/Audiokings Vocals.vst3" macpack/
-          cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" macpack/
+          if [ -d "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" ]; then
+            cp -R "build/AudiokingsVocals_artefacts/Release/AU/Audiokings Vocals.component" macpack/
+          fi
           chmod +x installer/mac/Uninstall-AudiokingsVocals.command
           cp installer/mac/Uninstall-AudiokingsVocals.command macpack/
           ditto -c -k --keepParent macpack AudiokingsVocals-macOS-Plugins.zip
@@ -141,7 +153,7 @@ jobs:
         with:
           name: AudiokingsVocals-macOS
           path: |
-            AudiokingsVocals-macOS-3.5.0.pkg
+            AudiokingsVocals-macOS-*.pkg
             AudiokingsVocals-macOS-Plugins.zip
 
   # ------------------------------------------------------------------ Release
