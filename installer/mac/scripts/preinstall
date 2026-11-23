@@ -1,0 +1,11 @@
+#!/bin/bash
+# Audiokings Vocals - runs BEFORE the new files are copied.
+# Removes every previous version (system-wide and per-user copies, VST3 and Audio Unit)
+# so the new plug-in always replaces the old one cleanly.
+rm -rf "/Library/Audio/Plug-Ins/VST3/Audiokings Vocals.vst3"
+rm -rf "/Library/Audio/Plug-Ins/Components/Audiokings Vocals.component"
+for home in /Users/*; do
+    rm -rf "$home/Library/Audio/Plug-Ins/VST3/Audiokings Vocals.vst3"
+    rm -rf "$home/Library/Audio/Plug-Ins/Components/Audiokings Vocals.component"
+done
+exit 0

@@ -1,0 +1,7 @@
+#!/bin/bash
+# Audiokings Vocals - runs AFTER the files are copied.
+# Clears the quarantine flag and refreshes the Audio Unit registry so hosts see the new version.
+xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/VST3/Audiokings Vocals.vst3" 2>/dev/null
+xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/Components/Audiokings Vocals.component" 2>/dev/null
+killall -9 AudioComponentRegistrar 2>/dev/null
+exit 0
